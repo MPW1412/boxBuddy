@@ -3,16 +3,12 @@ import { View, Text, TextInput, TouchableOpacity, Image, StyleSheet, Alert, Scro
 import { Dimensions } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import * as ImagePicker from 'expo-image-picker';
-import * as ImageManipulator from 'expo-image-manipulator';
-import { GestureHandlerRootView, PanGestureHandler, Gesture } from 'react-native-gesture-handler';
-import Animated, { useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 import axios from 'axios';
 import colors from '../constants/colors';
 import { Ionicons } from '@expo/vector-icons';
-import CropModal from './CropModal';
 
 const API_URL = 'http://localhost:5000';
-const { height, width: screenWidth } = Dimensions.get('window');
+const { height } = Dimensions.get('window');
 
 export default function CreateItemScreen({ route, navigation }) {
   const item = route.params?.item || {};
@@ -27,6 +23,7 @@ export default function CreateItemScreen({ route, navigation }) {
   const [itemUuid, setItemUuid] = useState(item.uuid || null);
   const [cropModalVisible, setCropModalVisible] = useState(false);
   const [imageToCrop, setImageToCrop] = useState(null);
+  const [crop, setCrop] = useState({ unit: '%', x: 25, y: 25, width: 50, height: 50 });
 
   const createItem = async () => {
     if (!name.trim()) {
@@ -78,8 +75,13 @@ export default function CreateItemScreen({ route, navigation }) {
       });
 
       if (!result.canceled) {
-        setImageToCrop(result.assets[0].uri);
-        setCropModalVisible(true);
+        const uri = result.assets[0].uri;
+        if (Platform.OS === 'web') {
+          setImageToCrop(uri);
+          setCropModalVisible(true);
+        } else {
+          setImages([...images, uri]);
+        }
       }
     } catch (error) {
       Alert.alert('Error', 'Gallery picker not available on this platform: ' + error.message);
@@ -125,8 +127,7 @@ export default function CreateItemScreen({ route, navigation }) {
         });
         console.log('Camera result:', result);
         if (!result.canceled) {
-          setImageToCrop(result.assets[0].uri);
-          setCropModalVisible(true);
+          setImages([...images, result.assets[0].uri]);
         }
       } catch (error) {
         console.log('Camera error:', error);
@@ -173,71 +174,32 @@ export default function CreateItemScreen({ route, navigation }) {
     setImages([]);
   };
 
-  const CropUI = ({ imageToCrop, onClose, onCrop }) => {
-  const translateX = useSharedValue(0);
-  const translateY = useSharedValue(0);
-  const boxWidth = useSharedValue(200);
-  const boxHeight = useSharedValue(200);
-
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: translateX.value }, { translateY: translateY.value }],
-    width: boxWidth.value,
-    height: boxHeight.value,
-    borderWidth: 2,
-    borderColor: 'white',
-    position: 'absolute',
-  }));
-
-  const panGesture = Gesture.Pan()
-    .onUpdate((e) => {
-      translateX.value = e.translationX;
-      translateY.value = e.translationY;
+  const getCroppedImg = (imageSrc, crop) => {
+    const image = new Image();
+    image.src = imageSrc;
+    return new Promise((resolve) => {
+      image.onload = () => {
+        const canvas = document.createElement('canvas');
+        const scaleX = image.naturalWidth / image.width;
+        const scaleY = image.naturalHeight / image.height;
+        canvas.width = crop.width;
+        canvas.height = crop.height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(
+          image,
+          crop.x * scaleX,
+          crop.y * scaleY,
+          crop.width * scaleX,
+          crop.height * scaleY,
+          0,
+          0,
+          crop.width,
+          crop.height
+        );
+        resolve(canvas.toDataURL('image/jpeg'));
+      };
     });
-
-  const resizeGesture = Gesture.Pan()
-    .onUpdate((e) => {
-      boxWidth.value = 200 + e.translationX;
-      boxHeight.value = 200 + e.translationY;
-    });
-
-  const cropImage = async () => {
-    const manipulated = await ImageManipulator.manipulateAsync(imageToCrop, [{
-      crop: { originX: translateX.value, originY: translateY.value, width: boxWidth.value, height: boxHeight.value }
-    }], { format: 'jpeg', compress: 0.8 });
-    return manipulated.uri;
   };
-
-  return (
-    <Modal visible={true} animationType="slide">
-      <GestureHandlerRootView style={styles.cameraFullScreen}>
-        <Image source={{ uri: imageToCrop }} style={{ width: '100%', height: height * 0.7, resizeMode: 'contain' }} />
-        <PanGestureHandler onGestureEvent={panGesture}>
-          <Animated.View style={animatedStyle}>
-            <PanGestureHandler onGestureEvent={resizeGesture}>
-              <Animated.View style={{ width: 30, height: 30, backgroundColor: 'white', position: 'absolute', bottom: 0, right: 0 }} />
-            </PanGestureHandler>
-          </Animated.View>
-        </PanGestureHandler>
-        <View style={styles.cameraControls}>
-          <TouchableOpacity style={styles.cameraButton} onPress={onClose}>
-            <Ionicons name="close" size={30} color="white" />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.cameraButton} onPress={async () => {
-            try {
-              const croppedUri = await cropImage();
-              onCrop(croppedUri);
-              onClose();
-            } catch (error) {
-              Alert.alert('Crop Error', error.message);
-            }
-          }}>
-            <Ionicons name="checkmark" size={30} color="white" />
-          </TouchableOpacity>
-        </View>
-      </GestureHandlerRootView>
-    </Modal>
-  );
-};
 
   if (cameraOpen && Platform.OS === 'web') {
     return (
@@ -255,9 +217,36 @@ export default function CreateItemScreen({ route, navigation }) {
     );
   }
 
-  if (cropModalVisible) {
-  return <CropUI imageToCrop={imageToCrop} onClose={() => setCropModalVisible(false)} onCrop={(croppedUri) => setImages([...images, croppedUri])} />;
-}
+  if (cropModalVisible && Platform.OS === 'web') {
+    const cropLib = 'react' + '-image-crop';
+    const ReactCrop = require(cropLib).default;
+    require(cropLib + '/dist/ReactCrop.css');
+    return (
+      <Modal visible={cropModalVisible} animationType="slide">
+        <View style={styles.cameraFullScreen}>
+          <ReactCrop crop={crop} onChange={setCrop} locked={true} ruleOfThirds={false}>
+            <Image source={{ uri: imageToCrop }} style={{ width: '100%', height: height * 0.7 }} />
+          </ReactCrop>
+          <View style={styles.cameraControls}>
+            <TouchableOpacity style={styles.cameraButton} onPress={() => setCropModalVisible(false)}>
+              <Ionicons name="close" size={30} color="white" />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.cameraButton} onPress={async () => {
+              try {
+                const croppedUri = await getCroppedImg(imageToCrop, crop);
+                setImages([...images, croppedUri]);
+                setCropModalVisible(false);
+              } catch (error) {
+                Alert.alert('Crop Error', error.message);
+              }
+            }}>
+              <Ionicons name="checkmark" size={30} color="white" />
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+    );
+  }
 
   return (
     <ScrollView style={styles.container}>
