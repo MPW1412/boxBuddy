@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, Image, StyleSheet, Alert, ScrollView } from 'react-native';
+import { Picker } from '@react-native-picker/picker';
 import * as ImagePicker from 'expo-image-picker';
 import axios from 'axios';
 import colors from '../constants/colors';
@@ -106,13 +107,17 @@ export default function CreateItemScreen({ route, navigation }) {
         onChangeText={setType}
         placeholderTextColor={colors.text}
       />
-      <TextInput
-        style={styles.input}
-        placeholder="Visibility (PRIVATE, SAME_INSTANCE, PUBLIC)"
-        value={visibility}
-        onChangeText={setVisibility}
-        placeholderTextColor={colors.text}
-      />
+      <View style={styles.pickerContainer}>
+        <Picker
+          selectedValue={visibility}
+          onValueChange={(itemValue) => setVisibility(itemValue)}
+          style={styles.picker}
+        >
+          <Picker.Item label="Private" value="PRIVATE" />
+          <Picker.Item label="Same Instance" value="SAME_INSTANCE" />
+          <Picker.Item label="Public" value="PUBLIC" />
+        </Picker>
+      </View>
       <TextInput
         style={styles.input}
         placeholder="Description (optional)"
@@ -178,6 +183,22 @@ const styles = StyleSheet.create({
     padding: 12,
     fontSize: 16,
     color: colors.text,
+  },
+  pickerContainer: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.card,
+    borderRadius: 8,
+    marginBottom: 15,
+    height: 50,
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+  },
+  picker: {
+    color: colors.text,
+    fontSize: 16,
+    backgroundColor: '#fff',
+    borderWidth: 0,
   },
   button: {
     backgroundColor: colors.primary,
