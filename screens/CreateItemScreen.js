@@ -1,11 +1,14 @@
-import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, Image, StyleSheet, Alert, ScrollView } from 'react-native';
+import React, { useState, useRef, useEffect } from 'react';
+import { View, Text, TextInput, TouchableOpacity, Image, StyleSheet, Alert, ScrollView, Platform } from 'react-native';
+import { Dimensions } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import * as ImagePicker from 'expo-image-picker';
 import axios from 'axios';
 import colors from '../constants/colors';
+import { Ionicons } from '@expo/vector-icons';
 
 const API_URL = 'http://localhost:5000';
+const { height } = Dimensions.get('window');
 
 export default function CreateItemScreen({ route, navigation }) {
   const item = route.params?.item || {};
@@ -14,7 +17,9 @@ export default function CreateItemScreen({ route, navigation }) {
   const [visibility, setVisibility] = useState(item.visibility || 'PRIVATE');
   const [description, setDescription] = useState(item.description || '');
   const [quantity, setQuantity] = useState(item.quantity?.toString() || '1');
-  const [image, setImage] = useState(null);
+  const [images, setImages] = useState([]);
+  const [cameraOpen, setCameraOpen] = useState(false);
+  const videoRef = useRef(null);
   const [itemUuid, setItemUuid] = useState(item.uuid || null);
 
   const createItem = async () => {
@@ -33,7 +38,7 @@ export default function CreateItemScreen({ route, navigation }) {
       setName('');
       setDescription('');
       setQuantity('');
-      setImage(null);
+      setImages([]);
     } catch (error) {
       Alert.alert('Error', 'Failed to create item: ' + error.message);
     }
@@ -52,7 +57,13 @@ export default function CreateItemScreen({ route, navigation }) {
     }
   };
 
-  const pickImage = async () => {
+  const addFromGallery = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Error', 'Media library permission denied');
+      return;
+    }
+
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
@@ -62,33 +73,134 @@ export default function CreateItemScreen({ route, navigation }) {
       });
 
       if (!result.canceled) {
-        setImage(result.assets[0].uri);
+        setImages([...images, result.assets[0].uri]);
       }
     } catch (error) {
-      Alert.alert('Error', 'Image picker not available on this platform');
+      Alert.alert('Error', 'Gallery picker not available on this platform: ' + error.message);
     }
   };
 
-  const uploadImage = async () => {
-    if (!itemUuid || !image) return;
-
-    const formData = new FormData();
-    formData.append('file', {
-      uri: image,
-      type: 'image/jpeg',
-      name: 'upload.jpg',
-    });
-
-    try {
-      await axios.post(`${API_URL}/items/${itemUuid}/image`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
+  useEffect(() => {
+    if (cameraOpen && Platform.OS === 'web') {
+      navigator.mediaDevices.getUserMedia({ video: true }).then(stream => {
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+        }
+      }).catch(error => {
+        Alert.alert('Error', 'Webcam access denied');
+        setCameraOpen(false);
       });
-      Alert.alert('Success', 'Image uploaded successfully!');
-      setImage(null);
-    } catch (error) {
-      Alert.alert('Error', 'Failed to upload image: ' + error.message);
+    }
+    return () => {
+      if (Platform.OS === 'web' && videoRef.current && videoRef.current.srcObject) {
+        videoRef.current.srcObject.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, [cameraOpen]);
+
+  const addFromCamera = async () => {
+    if (Platform.OS === 'web') {
+      setCameraOpen(true);
+    } else {
+      console.log('Requesting camera permissions');
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      console.log('Camera permission status:', status);
+      if (status !== 'granted') {
+        console.log('Camera permission denied');
+        Alert.alert('Error', 'Camera permission denied');
+        return;
+      }
+
+      console.log('Launching camera');
+      try {
+        const result = await ImagePicker.launchCameraAsync({
+          allowsEditing: false,
+          quality: 1,
+        });
+        console.log('Camera result:', result);
+        if (!result.canceled) {
+          console.log('Adding image');
+          setImages([...images, result.assets[0].uri]);
+        }
+      } catch (error) {
+        console.log('Camera error:', error);
+        Alert.alert('Error', 'Camera not available on this platform: ' + error.message);
+      }
     }
   };
+
+  const captureImage = () => {
+    if (Platform.OS === 'web' && videoRef.current) {
+      const canvas = document.createElement('canvas');
+      canvas.width = videoRef.current.videoWidth;
+      canvas.height = videoRef.current.videoHeight;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(videoRef.current, 0, 0);
+      const imageUri = canvas.toDataURL('image/jpeg', 0.8);
+      setImages([...images, imageUri]);
+      setCameraOpen(false);
+    }
+  };
+
+
+
+  const doneCropping = async () => {
+    if (croppingImage && croppedAreaPixels) {
+      const croppedImage = await getCroppedImg(croppingImage, croppedAreaPixels);
+      setImages([...images, croppedImage]);
+      setCroppingImage(null);
+      setCrop({ unit: '%', x: 25, y: 25, width: 50, height: 50 });
+      setCroppedAreaPixels(null);
+    }
+  };
+
+  const cancelCropping = () => {
+    setCroppingImage(null);
+    setCrop({ x: 0, y: 0 });
+    setCroppedAreaPixels(null);
+  };
+
+  const uploadImages = async () => {
+    if (!itemUuid || images.length === 0) return;
+
+    for (const imageUri of images) {
+      const formData = new FormData();
+      formData.append('file', {
+        uri: imageUri,
+        type: 'image/jpeg',
+        name: 'upload.jpg',
+      });
+
+      try {
+        await axios.post(`${API_URL}/items/${itemUuid}/image`, formData, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
+      } catch (error) {
+        Alert.alert('Error', 'Failed to upload image: ' + error.message);
+        return;
+      }
+    }
+    Alert.alert('Success', 'All images uploaded successfully!');
+    setImages([]);
+  };
+
+
+
+  if (cameraOpen && Platform.OS === 'web') {
+    return (
+      <View style={styles.cameraFullScreen}>
+        <video ref={videoRef} autoPlay style={{ width: '100%', height: height * 0.7 }} />
+        <View style={styles.cameraControls}>
+          <TouchableOpacity style={styles.cameraButton} onPress={() => setCameraOpen(false)}>
+            <Ionicons name="close" size={30} color="white" />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.cameraButton} onPress={captureImage}>
+            <Ionicons name="camera" size={30} color="white" />
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <ScrollView style={styles.container}>
@@ -107,17 +219,13 @@ export default function CreateItemScreen({ route, navigation }) {
         onChangeText={setType}
         placeholderTextColor={colors.text}
       />
-      <View style={styles.pickerContainer}>
-        <Picker
-          selectedValue={visibility}
-          onValueChange={(itemValue) => setVisibility(itemValue)}
-          style={styles.picker}
-        >
-          <Picker.Item label="Private" value="PRIVATE" />
-          <Picker.Item label="Same Instance" value="SAME_INSTANCE" />
-          <Picker.Item label="Public" value="PUBLIC" />
-        </Picker>
-      </View>
+      <TextInput
+        style={styles.input}
+        placeholder="Visibility (PRIVATE, SAME_INSTANCE, PUBLIC)"
+        value={visibility}
+        onChangeText={setVisibility}
+        placeholderTextColor={colors.text}
+      />
       <TextInput
         style={styles.input}
         placeholder="Description (optional)"
@@ -145,16 +253,22 @@ export default function CreateItemScreen({ route, navigation }) {
           <Text style={styles.quantityButtonText}>+</Text>
         </TouchableOpacity>
       </View>
-      <TouchableOpacity style={styles.button} onPress={itemUuid ? updateItem : createItem}>
-        <Text style={styles.buttonText}>{itemUuid ? 'Update Item' : 'Create Item'}</Text>
+      <TouchableOpacity style={styles.button} onPress={addFromCamera}>
+        <Text style={styles.buttonText}>Take Photo</Text>
       </TouchableOpacity>
-      <TouchableOpacity style={styles.button} onPress={pickImage}>
-        <Text style={styles.buttonText}>Pick Image</Text>
+      <TouchableOpacity style={styles.button} onPress={addFromGallery}>
+        <Text style={styles.buttonText}>Add from Gallery</Text>
       </TouchableOpacity>
-      {image && <Image source={{ uri: image }} style={styles.image} />}
-      {image && itemUuid && (
-        <TouchableOpacity style={styles.button} onPress={uploadImage}>
-          <Text style={styles.buttonText}>Upload Image</Text>
+      {images.length > 0 && (
+        <ScrollView horizontal style={styles.imageScroll}>
+          {images.map((uri, index) => (
+            <Image key={index} source={{ uri }} style={styles.thumbnail} />
+          ))}
+        </ScrollView>
+      )}
+      {images.length > 0 && itemUuid && (
+        <TouchableOpacity style={styles.button} onPress={uploadImages}>
+          <Text style={styles.buttonText}>Upload Photos</Text>
         </TouchableOpacity>
       )}
     </ScrollView>
@@ -212,11 +326,14 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
   },
-  image: {
-    width: '100%',
-    height: 200,
-    borderRadius: 8,
+  imageScroll: {
     marginVertical: 10,
+  },
+  thumbnail: {
+    width: 80,
+    height: 80,
+    borderRadius: 8,
+    marginRight: 10,
   },
   quantityRow: {
     flexDirection: 'row',
@@ -251,5 +368,43 @@ const styles = StyleSheet.create({
     fontSize: 30,
     fontWeight: 'bold',
     color: colors.card,
+  },
+  cameraContainer: {
+    alignItems: 'center',
+    marginVertical: 10,
+  },
+  cameraFullScreen: {
+    flex: 1,
+    backgroundColor: 'black',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  cropWrapper: {
+    width: '100%',
+    height: height * 0.7,
+    position: 'relative',
+  },
+  cameraControls: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    width: '60%',
+    marginTop: 20,
+  },
+  cropControls: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    width: '60%',
+    position: 'absolute',
+    bottom: 20,
+  },
+  cameraButton: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#14d91d',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginHorizontal: 10,
   },
 });
