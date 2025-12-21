@@ -1,14 +1,18 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, Image, StyleSheet, Alert, ScrollView, Platform } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, Image, StyleSheet, Alert, ScrollView, Platform, Modal } from 'react-native';
 import { Dimensions } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import * as ImagePicker from 'expo-image-picker';
+import * as ImageManipulator from 'expo-image-manipulator';
+import { GestureHandlerRootView, PanGestureHandler, Gesture } from 'react-native-gesture-handler';
+import Animated, { useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 import axios from 'axios';
 import colors from '../constants/colors';
 import { Ionicons } from '@expo/vector-icons';
+import CropModal from './CropModal';
 
 const API_URL = 'http://localhost:5000';
-const { height } = Dimensions.get('window');
+const { height, width: screenWidth } = Dimensions.get('window');
 
 export default function CreateItemScreen({ route, navigation }) {
   const item = route.params?.item || {};
@@ -21,6 +25,8 @@ export default function CreateItemScreen({ route, navigation }) {
   const [cameraOpen, setCameraOpen] = useState(false);
   const videoRef = useRef(null);
   const [itemUuid, setItemUuid] = useState(item.uuid || null);
+  const [cropModalVisible, setCropModalVisible] = useState(false);
+  const [imageToCrop, setImageToCrop] = useState(null);
 
   const createItem = async () => {
     if (!name.trim()) {
@@ -67,13 +73,13 @@ export default function CreateItemScreen({ route, navigation }) {
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        aspect: [4, 3],
+        allowsEditing: false,
         quality: 1,
       });
 
       if (!result.canceled) {
-        setImages([...images, result.assets[0].uri]);
+        setImageToCrop(result.assets[0].uri);
+        setCropModalVisible(true);
       }
     } catch (error) {
       Alert.alert('Error', 'Gallery picker not available on this platform: ' + error.message);
@@ -119,8 +125,8 @@ export default function CreateItemScreen({ route, navigation }) {
         });
         console.log('Camera result:', result);
         if (!result.canceled) {
-          console.log('Adding image');
-          setImages([...images, result.assets[0].uri]);
+          setImageToCrop(result.assets[0].uri);
+          setCropModalVisible(true);
         }
       } catch (error) {
         console.log('Camera error:', error);
@@ -137,27 +143,10 @@ export default function CreateItemScreen({ route, navigation }) {
       const ctx = canvas.getContext('2d');
       ctx.drawImage(videoRef.current, 0, 0);
       const imageUri = canvas.toDataURL('image/jpeg', 0.8);
-      setImages([...images, imageUri]);
+      setImageToCrop(imageUri);
       setCameraOpen(false);
+      setCropModalVisible(true);
     }
-  };
-
-
-
-  const doneCropping = async () => {
-    if (croppingImage && croppedAreaPixels) {
-      const croppedImage = await getCroppedImg(croppingImage, croppedAreaPixels);
-      setImages([...images, croppedImage]);
-      setCroppingImage(null);
-      setCrop({ unit: '%', x: 25, y: 25, width: 50, height: 50 });
-      setCroppedAreaPixels(null);
-    }
-  };
-
-  const cancelCropping = () => {
-    setCroppingImage(null);
-    setCrop({ x: 0, y: 0 });
-    setCroppedAreaPixels(null);
   };
 
   const uploadImages = async () => {
@@ -184,7 +173,71 @@ export default function CreateItemScreen({ route, navigation }) {
     setImages([]);
   };
 
+  const CropUI = ({ imageToCrop, onClose, onCrop }) => {
+  const translateX = useSharedValue(0);
+  const translateY = useSharedValue(0);
+  const boxWidth = useSharedValue(200);
+  const boxHeight = useSharedValue(200);
 
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: translateX.value }, { translateY: translateY.value }],
+    width: boxWidth.value,
+    height: boxHeight.value,
+    borderWidth: 2,
+    borderColor: 'white',
+    position: 'absolute',
+  }));
+
+  const panGesture = Gesture.Pan()
+    .onUpdate((e) => {
+      translateX.value = e.translationX;
+      translateY.value = e.translationY;
+    });
+
+  const resizeGesture = Gesture.Pan()
+    .onUpdate((e) => {
+      boxWidth.value = 200 + e.translationX;
+      boxHeight.value = 200 + e.translationY;
+    });
+
+  const cropImage = async () => {
+    const manipulated = await ImageManipulator.manipulateAsync(imageToCrop, [{
+      crop: { originX: translateX.value, originY: translateY.value, width: boxWidth.value, height: boxHeight.value }
+    }], { format: 'jpeg', compress: 0.8 });
+    return manipulated.uri;
+  };
+
+  return (
+    <Modal visible={true} animationType="slide">
+      <GestureHandlerRootView style={styles.cameraFullScreen}>
+        <Image source={{ uri: imageToCrop }} style={{ width: '100%', height: height * 0.7, resizeMode: 'contain' }} />
+        <PanGestureHandler onGestureEvent={panGesture}>
+          <Animated.View style={animatedStyle}>
+            <PanGestureHandler onGestureEvent={resizeGesture}>
+              <Animated.View style={{ width: 30, height: 30, backgroundColor: 'white', position: 'absolute', bottom: 0, right: 0 }} />
+            </PanGestureHandler>
+          </Animated.View>
+        </PanGestureHandler>
+        <View style={styles.cameraControls}>
+          <TouchableOpacity style={styles.cameraButton} onPress={onClose}>
+            <Ionicons name="close" size={30} color="white" />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.cameraButton} onPress={async () => {
+            try {
+              const croppedUri = await cropImage();
+              onCrop(croppedUri);
+              onClose();
+            } catch (error) {
+              Alert.alert('Crop Error', error.message);
+            }
+          }}>
+            <Ionicons name="checkmark" size={30} color="white" />
+          </TouchableOpacity>
+        </View>
+      </GestureHandlerRootView>
+    </Modal>
+  );
+};
 
   if (cameraOpen && Platform.OS === 'web') {
     return (
@@ -201,6 +254,10 @@ export default function CreateItemScreen({ route, navigation }) {
       </View>
     );
   }
+
+  if (cropModalVisible) {
+  return <CropUI imageToCrop={imageToCrop} onClose={() => setCropModalVisible(false)} onCrop={(croppedUri) => setImages([...images, croppedUri])} />;
+}
 
   return (
     <ScrollView style={styles.container}>
@@ -369,34 +426,17 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: colors.card,
   },
-  cameraContainer: {
-    alignItems: 'center',
-    marginVertical: 10,
-  },
   cameraFullScreen: {
     flex: 1,
     backgroundColor: 'black',
     justifyContent: 'center',
     alignItems: 'center',
   },
-
-  cropWrapper: {
-    width: '100%',
-    height: height * 0.7,
-    position: 'relative',
-  },
   cameraControls: {
     flexDirection: 'row',
     justifyContent: 'center',
     width: '60%',
     marginTop: 20,
-  },
-  cropControls: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    width: '60%',
-    position: 'absolute',
-    bottom: 20,
   },
   cameraButton: {
     width: 60,
