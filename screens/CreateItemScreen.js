@@ -12,7 +12,7 @@ export default function CreateItemScreen({ route, navigation }) {
   const [type, setType] = useState(item.type || 'ITEM');
   const [visibility, setVisibility] = useState(item.visibility || 'PRIVATE');
   const [description, setDescription] = useState(item.description || '');
-  const [quantity, setQuantity] = useState(item.quantity?.toString() || '');
+  const [quantity, setQuantity] = useState(item.quantity?.toString() || '1');
   const [image, setImage] = useState(null);
   const [itemUuid, setItemUuid] = useState(item.uuid || null);
 
@@ -52,15 +52,19 @@ export default function CreateItemScreen({ route, navigation }) {
   };
 
   const pickImage = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [4, 3],
-      quality: 1,
-    });
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [4, 3],
+        quality: 1,
+      });
 
-    if (!result.canceled) {
-      setImage(result.assets[0].uri);
+      if (!result.canceled) {
+        setImage(result.assets[0].uri);
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Image picker not available on this platform');
     }
   };
 
@@ -117,14 +121,25 @@ export default function CreateItemScreen({ route, navigation }) {
         multiline
         placeholderTextColor={colors.text}
       />
-      <TextInput
-        style={styles.input}
-        placeholder="Quantity (optional)"
-        value={quantity}
-        onChangeText={setQuantity}
-        keyboardType="numeric"
-        placeholderTextColor={colors.text}
-      />
+      <View style={styles.quantityRow}>
+        <TouchableOpacity style={styles.quantityButton} onPress={() => setQuantity(Math.max(0, parseInt(quantity || 0) - 1).toString())}>
+          <Text style={styles.quantityButtonText}>-</Text>
+        </TouchableOpacity>
+        <TextInput
+          style={styles.quantityInput}
+          value={quantity}
+          onChangeText={(text) => {
+            const num = parseInt(text);
+            if (isNaN(num) || num < 0) setQuantity('0');
+            else setQuantity(num.toString());
+          }}
+          keyboardType="numeric"
+          placeholderTextColor={colors.text}
+        />
+        <TouchableOpacity style={styles.quantityButton} onPress={() => setQuantity((parseInt(quantity || 0) + 1).toString())}>
+          <Text style={styles.quantityButtonText}>+</Text>
+        </TouchableOpacity>
+      </View>
       <TouchableOpacity style={styles.button} onPress={itemUuid ? updateItem : createItem}>
         <Text style={styles.buttonText}>{itemUuid ? 'Update Item' : 'Create Item'}</Text>
       </TouchableOpacity>
@@ -181,5 +196,119 @@ const styles = StyleSheet.create({
     height: 200,
     borderRadius: 8,
     marginVertical: 10,
+  },
+  quantityRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 15,
+  },
+  quantityButton: {
+    backgroundColor: '#14d91d',
+    padding: 5,
+    borderRadius: 8,
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  quantityInput: {
+    flex: 1,
+    height: 40,
+    borderRadius: 8,
+    backgroundColor: '#fff',
+    borderColor: '#ccc',
+    borderWidth: 1,
+    padding: 0,
+    textAlign: 'center',
+    fontSize: 20,
+    color: '#000',
+    fontWeight: 'bold',
+    minWidth: 60,
+  },
+  quantityButton: {
+    backgroundColor: '#14d91d',
+    borderRadius: 8,
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  quantityInput: {
+    flex: 1,
+    height: 40,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.card,
+    marginHorizontal: 5,
+    padding: 0,
+    fontSize: 16,
+    color: colors.text,
+    textAlign: 'center',
+    borderRadius: 8,
+  },
+  quantityButton: {
+    backgroundColor: '#14d91d',
+    padding: 5,
+    borderRadius: 8,
+    minWidth: 35,
+    alignItems: 'center',
+  },
+  quantityInput: {
+    flex: 1,
+    minWidth: 60,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.card,
+    marginHorizontal: 5,
+    padding: 12,
+    fontSize: 16,
+    color: colors.text,
+    textAlign: 'center',
+  },
+  quantityButton: {
+    backgroundColor: '#14d91d',
+    padding: 5,
+    borderRadius: 8,
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  quantityInput: {
+    flex: 0,
+    height: 40,
+    borderRadius: 8,
+    backgroundColor: '#fff',
+    borderColor: '#ccc',
+    borderWidth: 1,
+    padding: 0,
+    textAlign: 'center',
+    fontSize: 20,
+    color: '#000',
+    fontWeight: 'bold',
+    minWidth: 60,
+    maxWidth: 100,
+    width: 'auto',
+  },
+  quantityButtonText: {
+    fontSize: 30,
+    fontWeight: 'bold',
+    color: colors.card,
+  },
+  quantityInput: {
+    flex: 0,
+    height: 40,
+    borderRadius: 8,
+    backgroundColor: '#fff',
+    borderColor: '#ccc',
+    borderWidth: 1,
+    padding: 0,
+    textAlign: 'center',
+    fontSize: 20,
+    color: '#000',
+    fontWeight: 'bold',
+    minWidth: 60,
+    maxWidth: 100,
+    width: 'auto',
   },
 });
