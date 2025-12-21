@@ -1,24 +1,53 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, Button, Image, StyleSheet } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, Image, StyleSheet, Alert, ScrollView } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import axios from 'axios';
+import colors from '../constants/colors';
 
-const API_URL = 'http://localhost:5000'; // Update with actual backend URL
+const API_URL = 'http://localhost:5000';
 
-export default function CreateItemScreen() {
-  const [name, setName] = useState('');
-  const [type, setType] = useState('ITEM');
-  const [visibility, setVisibility] = useState('PRIVATE');
+export default function CreateItemScreen({ route, navigation }) {
+  const item = route.params?.item || {};
+  const [name, setName] = useState(item.name || '');
+  const [type, setType] = useState(item.type || 'ITEM');
+  const [visibility, setVisibility] = useState(item.visibility || 'PRIVATE');
+  const [description, setDescription] = useState(item.description || '');
+  const [quantity, setQuantity] = useState(item.quantity?.toString() || '');
   const [image, setImage] = useState(null);
-  const [itemUuid, setItemUuid] = useState(null);
+  const [itemUuid, setItemUuid] = useState(item.uuid || null);
 
   const createItem = async () => {
+    if (!name.trim()) {
+      Alert.alert('Error', 'Name is required');
+      return;
+    }
     try {
-      const response = await axios.post(`${API_URL}/items`, { name, type, visibility });
+      const data = { name: name.trim(), type, visibility };
+      if (description.trim()) data.description = description.trim();
+      if (quantity) data.quantity = parseInt(quantity);
+      const response = await axios.post(`${API_URL}/items`, data);
       setItemUuid(response.data.uuid);
-      alert('Item created successfully!');
+      Alert.alert('Success', 'Item created successfully!');
+      // Reset form
+      setName('');
+      setDescription('');
+      setQuantity('');
+      setImage(null);
     } catch (error) {
-      alert('Error creating item: ' + error.message);
+      Alert.alert('Error', 'Failed to create item: ' + error.message);
+    }
+  };
+
+  const updateItem = async () => {
+    if (!itemUuid) return;
+    try {
+      const data = { name: name.trim(), type, visibility };
+      if (description.trim()) data.description = description.trim();
+      if (quantity) data.quantity = parseInt(quantity);
+      await axios.put(`${API_URL}/items/${itemUuid}`, data);
+      Alert.alert('Success', 'Item updated successfully!');
+    } catch (error) {
+      Alert.alert('Error', 'Failed to update item: ' + error.message);
     }
   };
 
@@ -49,43 +78,108 @@ export default function CreateItemScreen() {
       await axios.post(`${API_URL}/items/${itemUuid}/image`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
-      alert('Image uploaded successfully!');
+      Alert.alert('Success', 'Image uploaded successfully!');
+      setImage(null);
     } catch (error) {
-      alert('Error uploading image: ' + error.message);
+      Alert.alert('Error', 'Failed to upload image: ' + error.message);
     }
   };
 
   return (
-    <View style={styles.container}>
-      <Text>Create New Item</Text>
+    <ScrollView style={styles.container}>
+      <Text style={styles.header}>{itemUuid ? 'Edit Item' : 'Create New Item'}</Text>
       <TextInput
         style={styles.input}
         placeholder="Name"
         value={name}
         onChangeText={setName}
+        placeholderTextColor={colors.text}
       />
       <TextInput
         style={styles.input}
         placeholder="Type (ITEM, CONTAINER, LOCATION)"
         value={type}
         onChangeText={setType}
+        placeholderTextColor={colors.text}
       />
       <TextInput
         style={styles.input}
         placeholder="Visibility (PRIVATE, SAME_INSTANCE, PUBLIC)"
         value={visibility}
         onChangeText={setVisibility}
+        placeholderTextColor={colors.text}
       />
-      <Button title="Create Item" onPress={createItem} />
-      <Button title="Pick Image" onPress={pickImage} />
+      <TextInput
+        style={styles.input}
+        placeholder="Description (optional)"
+        value={description}
+        onChangeText={setDescription}
+        multiline
+        placeholderTextColor={colors.text}
+      />
+      <TextInput
+        style={styles.input}
+        placeholder="Quantity (optional)"
+        value={quantity}
+        onChangeText={setQuantity}
+        keyboardType="numeric"
+        placeholderTextColor={colors.text}
+      />
+      <TouchableOpacity style={styles.button} onPress={itemUuid ? updateItem : createItem}>
+        <Text style={styles.buttonText}>{itemUuid ? 'Update Item' : 'Create Item'}</Text>
+      </TouchableOpacity>
+      <TouchableOpacity style={styles.button} onPress={pickImage}>
+        <Text style={styles.buttonText}>Pick Image</Text>
+      </TouchableOpacity>
       {image && <Image source={{ uri: image }} style={styles.image} />}
-      <Button title="Upload Image" onPress={uploadImage} disabled={!itemUuid || !image} />
-    </View>
+      {image && itemUuid && (
+        <TouchableOpacity style={styles.button} onPress={uploadImage}>
+          <Text style={styles.buttonText}>Upload Image</Text>
+        </TouchableOpacity>
+      )}
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 20 },
-  input: { borderWidth: 1, marginBottom: 10, padding: 8 },
-  image: { width: 200, height: 200, marginVertical: 10 },
+  container: {
+    flex: 1,
+    backgroundColor: colors.background,
+    padding: 20,
+  },
+  header: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: colors.primary,
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.card,
+    borderRadius: 8,
+    marginBottom: 15,
+    padding: 12,
+    fontSize: 16,
+    color: colors.text,
+  },
+  button: {
+    backgroundColor: colors.primary,
+    borderRadius: 8,
+    padding: 15,
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  buttonText: {
+    color: colors.card,
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  image: {
+    width: '100%',
+    height: 200,
+    borderRadius: 8,
+    marginVertical: 10,
+  },
 });
