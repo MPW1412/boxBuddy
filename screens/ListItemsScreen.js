@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, FlatList, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, FlatList, StyleSheet, TouchableOpacity, Image, ScrollView } from 'react-native';
 import axios from 'axios';
 import colors from '../constants/colors';
 
@@ -27,6 +27,13 @@ export default function ListItemsScreen({ navigation }) {
       <Text style={styles.subtitle}>Type: {item.type}</Text>
       <Text style={styles.subtitle}>Visibility: {item.visibility}</Text>
       <Text style={styles.subtitle}>Created: {new Date(item.creation_time).toLocaleDateString()}</Text>
+      {item.images && item.images.length > 0 && (
+        <ScrollView horizontal style={styles.imageScroll}>
+          {item.images.map((img, index) => (
+            <Image key={index} source={{ uri: `${API_URL}/images/${img.uuid}` }} style={styles.thumbnail} />
+          ))}
+        </ScrollView>
+      )}
     </TouchableOpacity>
   );
 
@@ -81,5 +88,14 @@ const styles = StyleSheet.create({
     color: colors.text,
     opacity: 0.7,
     marginBottom: 2,
+  },
+  imageScroll: {
+    marginTop: 10,
+  },
+  thumbnail: {
+    width: 60,
+    height: 60,
+    borderRadius: 5,
+    marginRight: 5,
   },
 });
