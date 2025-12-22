@@ -26,18 +26,29 @@ export default function CreateItemScreen({ route, navigation }) {
   const [cropModalVisible, setCropModalVisible] = useState(false);
 
   useEffect(() => {
-    if (itemUuid) {
+    // Only fetch item details when editing an existing item (coming from route params)
+    // Don't fetch after creating a new item (when itemUuid is set programmatically)
+    if (route.params?.item?.uuid) {
+      setItemUuid(route.params.item.uuid);
       fetchItemDetails();
     }
-  }, [itemUuid]);
+  }, [route.params?.item?.uuid]);
 
   const fetchItemDetails = async () => {
     try {
       const response = await axios.get(`${API_URL}/items/${itemUuid}`);
-      // Assume response.data has name, type, visibility, description, quantity, images
+      // Parse enum values to strip class prefix (e.g., "Type.ITEM" -> "ITEM")
+      const parseEnum = (value, defaultVal) => {
+        if (!value) return defaultVal;
+        if (typeof value === 'string' && value.includes('.')) {
+          return value.split('.').pop();
+        }
+        return value;
+      };
+      
       setName(response.data.name || '');
-      setType(response.data.type || 'ITEM');
-      setVisibility(response.data.visibility || 'PRIVATE');
+      setType(parseEnum(response.data.type, 'ITEM'));
+      setVisibility(parseEnum(response.data.visibility, 'PRIVATE'));
       setDescription(response.data.description || '');
       setQuantity(response.data.quantity?.toString() || '1');
       setImages(response.data.images ? response.data.images.map(img => `${API_URL}/images/${img.uuid}`) : []);
@@ -62,15 +73,30 @@ export default function CreateItemScreen({ route, navigation }) {
       if (description.trim()) data.description = description.trim();
       if (quantity) data.quantity = parseInt(quantity);
       const response = await axios.post(`${API_URL}/items`, data);
-      setItemUuid(response.data.uuid);
+      const newUuid = response.data.uuid;
+      
+      // Upload images if any
       if (images.length > 0) {
-        await uploadImages();
+        try {
+          await uploadImages(newUuid);
+          Alert.alert('Success', 'Item created and photos uploaded successfully!');
+        } catch (error) {
+          // Upload failed after retries, keep form unchanged so user can retry
+          setItemUuid(newUuid);
+          Alert.alert('Upload Error', error.message + '\n\nItem created but photos not uploaded. Please try updating the item again.');
+          return;
+        }
+      } else {
+        Alert.alert('Success', 'Item created successfully!');
       }
-      Alert.alert('Success', 'Item created and photos uploaded successfully!');
-      // Reset form
+      
+      // Reset form only after successful upload
+      setItemUuid(null);
       setName('');
+      setType('ITEM');
+      setVisibility('PRIVATE');
       setDescription('');
-      setQuantity('');
+      setQuantity('1');
       setImages([]);
     } catch (error) {
       Alert.alert('Error', 'Failed to create item: ' + error.message);
@@ -84,10 +110,23 @@ export default function CreateItemScreen({ route, navigation }) {
       if (description.trim()) data.description = description.trim();
       if (quantity) data.quantity = parseInt(quantity);
       await axios.put(`${API_URL}/items/${itemUuid}`, data);
+      
+      // Upload new images if any (will be added to existing)
       if (images.length > 0) {
-        await uploadImages();
+        try {
+          await uploadImages(itemUuid);
+          Alert.alert('Success', 'Item updated and photos uploaded successfully!');
+          // Clear local images after successful upload, then refetch
+          setImages([]);
+          await fetchItemDetails();
+        } catch (error) {
+          // Upload failed after retries, keep form unchanged
+          Alert.alert('Upload Error', error.message + '\n\nItem updated but new photos not uploaded. Please try again.');
+          return;
+        }
+      } else {
+        Alert.alert('Success', 'Item updated successfully!');
       }
-      Alert.alert('Success', 'Item updated and photos uploaded successfully!');
     } catch (error) {
       Alert.alert('Error', 'Failed to update item: ' + error.message);
     }
@@ -197,8 +236,8 @@ export default function CreateItemScreen({ route, navigation }) {
     });
   };
 
-  const uploadImages = async () => {
-    if (!itemUuid || images.length === 0) return;
+  const uploadImages = async (uuid) => {
+    if (!uuid || images.length === 0) return;
 
     for (const imageUri of images) {
       let data;
@@ -218,9 +257,23 @@ export default function CreateItemScreen({ route, navigation }) {
         continue;
       }
 
-      await axios.post(`${API_URL}/items/${itemUuid}/image`, data);
+      // Retry logic: 3 attempts
+      let uploaded = false;
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+          await axios.post(`${API_URL}/items/${uuid}/image`, data);
+          uploaded = true;
+          break;
+        } catch (error) {
+          console.error(`Upload attempt ${attempt} failed:`, error);
+          if (attempt === 3) {
+            throw new Error(`Failed to upload image after 3 attempts: ${error.message}`);
+          }
+          // Wait before retry (exponential backoff: 500ms, 1s, 2s)
+          await new Promise(resolve => setTimeout(resolve, 500 * Math.pow(2, attempt - 1)));
+        }
+      }
     }
-    setImages([]);
   };
 
   const getCroppedImg = (imageRef, crop) => {
@@ -287,7 +340,7 @@ export default function CreateItemScreen({ route, navigation }) {
                 setImageRef(e.target);
                 setImageSize({ width: e.target.offsetWidth, height: e.target.offsetHeight, naturalWidth: e.target.naturalWidth, naturalHeight: e.target.naturalHeight });
                 setImageLoaded(true);
-              }} />
+              }} style={{ width: '100%', height: 'auto' }} />
             </ReactCrop>
           </View>
           <View style={styles.cameraControls}>
