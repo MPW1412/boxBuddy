@@ -6,6 +6,8 @@ import * as ImagePicker from 'expo-image-picker';
 import axios from 'axios';
 import colors from '../constants/colors';
 import { Ionicons } from '@expo/vector-icons';
+import ReactCrop from 'react-image-crop';
+import 'react-image-crop/dist/ReactCrop.css';
 
 const API_URL = 'http://localhost:5000';
 const { height } = Dimensions.get('window');
@@ -23,7 +25,11 @@ export default function CreateItemScreen({ route, navigation }) {
   const [itemUuid, setItemUuid] = useState(item.uuid || null);
   const [cropModalVisible, setCropModalVisible] = useState(false);
   const [imageToCrop, setImageToCrop] = useState(null);
-  const [crop, setCrop] = useState({ unit: '%', x: 25, y: 25, width: 50, height: 50 });
+  const [crop, setCrop] = useState({ unit: '%', x: 0, y: 0, width: 100, height: 100 });
+  // Note: ReactCrop may convert to px on interaction, handle both in getCroppedImg
+  const [imageRef, setImageRef] = useState(null);
+  const [imageSize, setImageSize] = useState({ width: 0, height: 0, naturalWidth: 0, naturalHeight: 0 });
+  const [imageLoaded, setImageLoaded] = useState(false);
 
   const createItem = async () => {
     if (!name.trim()) {
@@ -77,6 +83,9 @@ export default function CreateItemScreen({ route, navigation }) {
       if (!result.canceled) {
         const uri = result.assets[0].uri;
         if (Platform.OS === 'web') {
+          setCrop({ unit: '%', x: 0, y: 0, width: 100, height: 100 });
+          setImageLoaded(false);
+          setImageRef(null);
           setImageToCrop(uri);
           setCropModalVisible(true);
         } else {
@@ -144,6 +153,9 @@ export default function CreateItemScreen({ route, navigation }) {
       const ctx = canvas.getContext('2d');
       ctx.drawImage(videoRef.current, 0, 0);
       const imageUri = canvas.toDataURL('image/jpeg', 0.8);
+      setCrop({ unit: '%', x: 0, y: 0, width: 100, height: 100 });
+      setImageLoaded(false);
+      setImageRef(null);
       setImageToCrop(imageUri);
       setCameraOpen(false);
       setCropModalVisible(true);
@@ -174,31 +186,37 @@ export default function CreateItemScreen({ route, navigation }) {
     setImages([]);
   };
 
-  const getCroppedImg = (imageSrc, crop) => {
-    const image = new Image();
-    image.src = imageSrc;
-    return new Promise((resolve) => {
-      image.onload = () => {
-        const canvas = document.createElement('canvas');
-        const scaleX = image.naturalWidth / image.width;
-        const scaleY = image.naturalHeight / image.height;
-        canvas.width = crop.width;
-        canvas.height = crop.height;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(
-          image,
-          crop.x * scaleX,
-          crop.y * scaleY,
-          crop.width * scaleX,
-          crop.height * scaleY,
-          0,
-          0,
-          crop.width,
-          crop.height
-        );
-        resolve(canvas.toDataURL('image/jpeg'));
+  const getCroppedImg = (imageRef, crop) => {
+    if (!imageRef || !imageLoaded) return Promise.reject('Image not loaded');
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    const scaleX = imageSize.naturalWidth / imageSize.width;
+    const scaleY = imageSize.naturalHeight / imageSize.height;
+
+    let pixelCrop = crop;
+    if (crop.unit === '%') {
+      pixelCrop = {
+        x: (crop.x / 100) * imageSize.width,
+        y: (crop.y / 100) * imageSize.height,
+        width: (crop.width / 100) * imageSize.width,
+        height: (crop.height / 100) * imageSize.height,
       };
-    });
+    }
+
+    canvas.width = pixelCrop.width * scaleX;
+    canvas.height = pixelCrop.height * scaleY;
+    ctx.drawImage(
+      imageRef,
+      pixelCrop.x * scaleX,
+      pixelCrop.y * scaleY,
+      pixelCrop.width * scaleX,
+      pixelCrop.height * scaleY,
+      0,
+      0,
+      canvas.width,
+      canvas.height
+    );
+    return canvas.toDataURL('image/jpeg');
   };
 
   if (cameraOpen && Platform.OS === 'web') {
@@ -218,25 +236,36 @@ export default function CreateItemScreen({ route, navigation }) {
   }
 
   if (cropModalVisible && Platform.OS === 'web') {
-    const cropLib = 'react' + '-image-crop';
-    const ReactCrop = require(cropLib).default;
-    require(cropLib + '/dist/ReactCrop.css');
     return (
       <Modal visible={cropModalVisible} animationType="slide">
         <View style={styles.cameraFullScreen}>
-          <ReactCrop crop={crop} onChange={setCrop} locked={true} ruleOfThirds={false}>
-            <Image source={{ uri: imageToCrop }} style={{ width: '100%', height: height * 0.7 }} />
-          </ReactCrop>
+          <View style={{ height: height * 0.7 }}>
+            <ReactCrop
+              crop={crop}
+              onChange={(newCrop) => setCrop(newCrop)}
+              ruleOfThirds={false}
+            >
+              <img src={imageToCrop} onLoad={(e) => {
+                console.log('Image loaded', e.target);
+                setImageRef(e.target);
+                setImageSize({ width: e.target.offsetWidth, height: e.target.offsetHeight, naturalWidth: e.target.naturalWidth, naturalHeight: e.target.naturalHeight });
+                setImageLoaded(true);
+              }} />
+            </ReactCrop>
+          </View>
           <View style={styles.cameraControls}>
             <TouchableOpacity style={styles.cameraButton} onPress={() => setCropModalVisible(false)}>
               <Ionicons name="close" size={30} color="white" />
             </TouchableOpacity>
-            <TouchableOpacity style={styles.cameraButton} onPress={async () => {
+            <TouchableOpacity style={[styles.cameraButton, !imageLoaded && { opacity: 0.5 }]} disabled={!imageLoaded} onPress={async () => {
+              console.log('Crop button pressed', imageRef, crop);
               try {
-                const croppedUri = await getCroppedImg(imageToCrop, crop);
+                const croppedUri = await getCroppedImg(imageRef, crop);
+                console.log('Cropped URI:', croppedUri);
                 setImages([...images, croppedUri]);
                 setCropModalVisible(false);
               } catch (error) {
+                console.error('Crop Error:', error);
                 Alert.alert('Crop Error', error.message);
               }
             }}>
