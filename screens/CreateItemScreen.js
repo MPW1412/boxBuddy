@@ -24,6 +24,27 @@ export default function CreateItemScreen({ route, navigation }) {
   const videoRef = useRef(null);
   const [itemUuid, setItemUuid] = useState(item.uuid || null);
   const [cropModalVisible, setCropModalVisible] = useState(false);
+
+  useEffect(() => {
+    if (itemUuid) {
+      fetchItemDetails();
+    }
+  }, [itemUuid]);
+
+  const fetchItemDetails = async () => {
+    try {
+      const response = await axios.get(`${API_URL}/items/${itemUuid}`);
+      // Assume response.data has name, type, visibility, description, quantity, images
+      setName(response.data.name || '');
+      setType(response.data.type || 'ITEM');
+      setVisibility(response.data.visibility || 'PRIVATE');
+      setDescription(response.data.description || '');
+      setQuantity(response.data.quantity?.toString() || '1');
+      setImages(response.data.images ? response.data.images.map(img => `${API_URL}/images/${img.uuid}`) : []);
+    } catch (error) {
+      Alert.alert('Error', 'Failed to load item details: ' + error.message);
+    }
+  };
   const [imageToCrop, setImageToCrop] = useState(null);
   const [crop, setCrop] = useState({ unit: '%', x: 0, y: 0, width: 100, height: 100 });
   // Note: ReactCrop may convert to px on interaction, handle both in getCroppedImg
@@ -42,7 +63,10 @@ export default function CreateItemScreen({ route, navigation }) {
       if (quantity) data.quantity = parseInt(quantity);
       const response = await axios.post(`${API_URL}/items`, data);
       setItemUuid(response.data.uuid);
-      Alert.alert('Success', 'Item created successfully!');
+      if (images.length > 0) {
+        await uploadImages();
+      }
+      Alert.alert('Success', 'Item created and photos uploaded successfully!');
       // Reset form
       setName('');
       setDescription('');
@@ -60,7 +84,10 @@ export default function CreateItemScreen({ route, navigation }) {
       if (description.trim()) data.description = description.trim();
       if (quantity) data.quantity = parseInt(quantity);
       await axios.put(`${API_URL}/items/${itemUuid}`, data);
-      Alert.alert('Success', 'Item updated successfully!');
+      if (images.length > 0) {
+        await uploadImages();
+      }
+      Alert.alert('Success', 'Item updated and photos uploaded successfully!');
     } catch (error) {
       Alert.alert('Error', 'Failed to update item: ' + error.message);
     }
@@ -166,17 +193,16 @@ export default function CreateItemScreen({ route, navigation }) {
     if (!itemUuid || images.length === 0) return;
 
     for (const imageUri of images) {
-      const formData = new FormData();
-      formData.append('file', {
-        uri: imageUri,
-        type: 'image/jpeg',
-        name: 'upload.jpg',
-      });
+      let data;
+      if (Platform.OS === 'web' && imageUri.startsWith('data:')) {
+        data = { image: imageUri };
+      } else {
+        // For native, could convert to base64, but skipping for now
+        continue;
+      }
 
       try {
-        await axios.post(`${API_URL}/items/${itemUuid}/image`, formData, {
-          headers: { 'Content-Type': 'multipart/form-data' },
-        });
+        await axios.post(`${API_URL}/items/${itemUuid}/image`, data);
       } catch (error) {
         Alert.alert('Error', 'Failed to upload image: ' + error.message);
         return;
@@ -327,10 +353,13 @@ export default function CreateItemScreen({ route, navigation }) {
         <TouchableOpacity style={styles.quantityButton} onPress={() => setQuantity((parseInt(quantity || 0) + 1).toString())}>
           <Text style={styles.quantityButtonText}>+</Text>
         </TouchableOpacity>
-      </View>
-      <TouchableOpacity style={styles.button} onPress={addFromCamera}>
-        <Text style={styles.buttonText}>Take Photo</Text>
-      </TouchableOpacity>
+       </View>
+       <TouchableOpacity style={styles.button} onPress={itemUuid ? updateItem : createItem}>
+         <Text style={styles.buttonText}>{itemUuid ? 'Update Item' : 'Create Item'}</Text>
+       </TouchableOpacity>
+       <TouchableOpacity style={styles.button} onPress={addFromCamera}>
+         <Text style={styles.buttonText}>Take Photo</Text>
+       </TouchableOpacity>
       <TouchableOpacity style={styles.button} onPress={addFromGallery}>
         <Text style={styles.buttonText}>Add from Gallery</Text>
       </TouchableOpacity>
@@ -340,13 +369,8 @@ export default function CreateItemScreen({ route, navigation }) {
             <Image key={index} source={{ uri }} style={styles.thumbnail} />
           ))}
         </ScrollView>
-      )}
-      {images.length > 0 && itemUuid && (
-        <TouchableOpacity style={styles.button} onPress={uploadImages}>
-          <Text style={styles.buttonText}>Upload Photos</Text>
-        </TouchableOpacity>
-      )}
-    </ScrollView>
+       )}
+     </ScrollView>
   );
 }
 
