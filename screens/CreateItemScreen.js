@@ -201,14 +201,8 @@ export default function CreateItemScreen({ route, navigation }) {
         continue;
       }
 
-      try {
-        await axios.post(`${API_URL}/items/${itemUuid}/image`, data);
-      } catch (error) {
-        Alert.alert('Error', 'Failed to upload image: ' + error.message);
-        return;
-      }
+      await axios.post(`${API_URL}/items/${itemUuid}/image`, data);
     }
-    Alert.alert('Success', 'All images uploaded successfully!');
     setImages([]);
   };
 
