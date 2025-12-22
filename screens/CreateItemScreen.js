@@ -189,13 +189,30 @@ export default function CreateItemScreen({ route, navigation }) {
     }
   };
 
+  const blobToDataURL = (blob) => {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.readAsDataURL(blob);
+    });
+  };
+
   const uploadImages = async () => {
     if (!itemUuid || images.length === 0) return;
 
     for (const imageUri of images) {
       let data;
-      if (Platform.OS === 'web' && imageUri.startsWith('data:')) {
-        data = { image: imageUri };
+      if (Platform.OS === 'web') {
+        if (imageUri.startsWith('data:')) {
+          data = { image: imageUri };
+        } else if (imageUri.startsWith('blob:')) {
+          const response = await fetch(imageUri);
+          const blob = await response.blob();
+          const dataURL = await blobToDataURL(blob);
+          data = { image: dataURL };
+        } else {
+          continue;
+        }
       } else {
         // For native, could convert to base64, but skipping for now
         continue;
