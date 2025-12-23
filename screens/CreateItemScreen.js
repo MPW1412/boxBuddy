@@ -229,13 +229,29 @@ export default function CreateItemScreen({ route, navigation }) {
 
   useEffect(() => {
     if (cameraOpen && Platform.OS === 'web') {
-      navigator.mediaDevices.getUserMedia({ video: true }).then(stream => {
+      // Try to use rear camera on mobile, otherwise use default
+      const constraints = {
+        video: {
+          facingMode: isMobile() ? { ideal: 'environment' } : 'user',
+          width: { ideal: 1920 },
+          height: { ideal: 1080 }
+        }
+      };
+      
+      navigator.mediaDevices.getUserMedia(constraints).then(stream => {
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
         }
       }).catch(error => {
-        Alert.alert('Error', 'Webcam access denied');
-        setCameraOpen(false);
+        // Fallback to basic constraints if ideal fails
+        navigator.mediaDevices.getUserMedia({ video: true }).then(stream => {
+          if (videoRef.current) {
+            videoRef.current.srcObject = stream;
+          }
+        }).catch(err => {
+          showToast('Webcam access denied', 'error');
+          setCameraOpen(false);
+        });
       });
     }
     return () => {
@@ -245,9 +261,39 @@ export default function CreateItemScreen({ route, navigation }) {
     };
   }, [cameraOpen]);
 
+  const isMobile = () => {
+    if (Platform.OS !== 'web') return true;
+    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+  };
+
   const addFromCamera = async () => {
     if (Platform.OS === 'web') {
-      setCameraOpen(true);
+      if (isMobile()) {
+        // Use native camera on mobile browsers
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'image/*';
+        input.capture = 'environment'; // Request rear camera
+        input.onchange = async (e) => {
+          const file = e.target.files[0];
+          if (file) {
+            const reader = new FileReader();
+            reader.onload = (event) => {
+              const dataURL = event.target.result;
+              setCrop({ unit: '%', x: 0, y: 0, width: 100, height: 100 });
+              setImageLoaded(false);
+              setImageRef(null);
+              setImageToCrop(dataURL);
+              setCropModalVisible(true);
+            };
+            reader.readAsDataURL(file);
+          }
+        };
+        input.click();
+      } else {
+        // Use web camera on desktop
+        setCameraOpen(true);
+      }
     } else {
       console.log('Requesting camera permissions');
       const { status } = await ImagePicker.requestCameraPermissionsAsync();
