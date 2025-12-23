@@ -9,6 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 import ReactCrop from 'react-image-crop';
 import 'react-image-crop/dist/ReactCrop.css';
 import Toast from '../components/Toast';
+import ConfirmDialog from '../components/ConfirmDialog';
 
 const API_URL = Platform.OS === 'web' 
   ? (typeof window !== 'undefined' && window.location.origin.includes('boxbuddy.walther.haus') 
@@ -72,6 +73,8 @@ export default function CreateItemScreen({ route, navigation }) {
   const [toastMessage, setToastMessage] = useState('');
   const [toastType, setToastType] = useState('success');
   const [hoveredImageIndex, setHoveredImageIndex] = useState(null);
+  const [confirmDialogVisible, setConfirmDialogVisible] = useState(false);
+  const [confirmDialogData, setConfirmDialogData] = useState(null);
 
   const showToast = (message, type = 'success') => {
     setToastMessage(message);
@@ -79,17 +82,25 @@ export default function CreateItemScreen({ route, navigation }) {
     setToastVisible(true);
   };
 
-  const deleteImage = async (index, imageObj) => {
+  const deleteImage = (index, imageObj) => {
     // Check if it's a server image (has uuid property) or local image (dataURL/blob)
     const isServerImage = imageObj && typeof imageObj === 'object' && imageObj.uuid;
     
-    const confirmDelete = window.confirm(
-      isServerImage 
+    setConfirmDialogData({
+      index,
+      imageObj,
+      isServerImage,
+      title: 'Delete Photo',
+      message: isServerImage 
         ? 'Delete this photo from the server? This cannot be undone.'
         : 'Remove this photo from the list?'
-    );
-    
-    if (!confirmDelete) return;
+    });
+    setConfirmDialogVisible(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    const { index, imageObj, isServerImage } = confirmDialogData;
+    setConfirmDialogVisible(false);
 
     if (isServerImage) {
       // Delete from server
@@ -106,6 +117,13 @@ export default function CreateItemScreen({ route, navigation }) {
       setImages(images.filter((_, i) => i !== index));
       showToast('Photo removed', 'success');
     }
+    
+    setConfirmDialogData(null);
+  };
+
+  const handleCancelDelete = () => {
+    setConfirmDialogVisible(false);
+    setConfirmDialogData(null);
   };
 
   const createItem = async () => {
@@ -419,6 +437,13 @@ export default function CreateItemScreen({ route, navigation }) {
         message={toastMessage}
         type={toastType}
         onHide={() => setToastVisible(false)}
+      />
+      <ConfirmDialog
+        visible={confirmDialogVisible}
+        title={confirmDialogData?.title || 'Confirm'}
+        message={confirmDialogData?.message || ''}
+        onConfirm={handleConfirmDelete}
+        onCancel={handleCancelDelete}
       />
       <Text style={styles.header}>{itemUuid ? 'Edit Item' : 'Create New Item'}</Text>
       <TextInput
