@@ -8,6 +8,7 @@ import colors from '../constants/colors';
 import { Ionicons } from '@expo/vector-icons';
 import ReactCrop from 'react-image-crop';
 import 'react-image-crop/dist/ReactCrop.css';
+import Toast from '../components/Toast';
 
 const API_URL = Platform.OS === 'web' 
   ? (typeof window !== 'undefined' && window.location.origin.includes('boxbuddy.walther.haus') 
@@ -66,10 +67,19 @@ export default function CreateItemScreen({ route, navigation }) {
   const [imageRef, setImageRef] = useState(null);
   const [imageSize, setImageSize] = useState({ width: 0, height: 0, naturalWidth: 0, naturalHeight: 0 });
   const [imageLoaded, setImageLoaded] = useState(false);
+  const [toastVisible, setToastVisible] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
+  const [toastType, setToastType] = useState('success');
+
+  const showToast = (message, type = 'success') => {
+    setToastMessage(message);
+    setToastType(type);
+    setToastVisible(true);
+  };
 
   const createItem = async () => {
     if (!name.trim()) {
-      Alert.alert('Error', 'Name is required');
+      showToast('Name is required', 'error');
       return;
     }
     try {
@@ -83,15 +93,15 @@ export default function CreateItemScreen({ route, navigation }) {
       if (images.length > 0) {
         try {
           await uploadImages(newUuid);
-          Alert.alert('Success', 'Item created and photos uploaded successfully!');
+          showToast('Item created and photos uploaded successfully!', 'success');
         } catch (error) {
           // Upload failed after retries, keep form unchanged so user can retry
           setItemUuid(newUuid);
-          Alert.alert('Upload Error', error.message + '\n\nItem created but photos not uploaded. Please try updating the item again.');
+          showToast('Item created but photos upload failed. Please try updating.', 'error');
           return;
         }
       } else {
-        Alert.alert('Success', 'Item created successfully!');
+        showToast('Item created successfully!', 'success');
       }
       
       // Reset form only after successful upload
@@ -103,7 +113,7 @@ export default function CreateItemScreen({ route, navigation }) {
       setQuantity('1');
       setImages([]);
     } catch (error) {
-      Alert.alert('Error', 'Failed to create item: ' + error.message);
+      showToast('Failed to create item: ' + error.message, 'error');
     }
   };
 
@@ -119,20 +129,20 @@ export default function CreateItemScreen({ route, navigation }) {
       if (images.length > 0) {
         try {
           await uploadImages(itemUuid);
-          Alert.alert('Success', 'Item updated and photos uploaded successfully!');
+          showToast('Item updated and photos uploaded successfully!', 'success');
           // Clear local images after successful upload, then refetch
           setImages([]);
           await fetchItemDetails();
         } catch (error) {
           // Upload failed after retries, keep form unchanged
-          Alert.alert('Upload Error', error.message + '\n\nItem updated but new photos not uploaded. Please try again.');
+          showToast('Item updated but photos upload failed. Try again.', 'error');
           return;
         }
       } else {
-        Alert.alert('Success', 'Item updated successfully!');
+        showToast('Item updated successfully!', 'success');
       }
     } catch (error) {
-      Alert.alert('Error', 'Failed to update item: ' + error.message);
+      showToast('Failed to update item: ' + error.message, 'error');
     }
   };
 
@@ -373,6 +383,12 @@ export default function CreateItemScreen({ route, navigation }) {
 
   return (
     <ScrollView style={styles.container}>
+      <Toast
+        visible={toastVisible}
+        message={toastMessage}
+        type={toastType}
+        onHide={() => setToastVisible(false)}
+      />
       <Text style={styles.header}>{itemUuid ? 'Edit Item' : 'Create New Item'}</Text>
       <TextInput
         style={styles.input}
