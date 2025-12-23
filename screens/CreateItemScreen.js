@@ -56,9 +56,10 @@ export default function CreateItemScreen({ route, navigation }) {
       setVisibility(parseEnum(response.data.visibility, 'PRIVATE'));
       setDescription(response.data.description || '');
       setQuantity(response.data.quantity?.toString() || '1');
-      setImages(response.data.images ? response.data.images.map(img => `${API_URL}/images/${img.uuid}`) : []);
+      // Store the full image object so we have the uuid for deletion
+      setImages(response.data.images || []);
     } catch (error) {
-      Alert.alert('Error', 'Failed to load item details: ' + error.message);
+      showToast('Failed to load item details: ' + error.message, 'error');
     }
   };
   const [imageToCrop, setImageToCrop] = useState(null);
@@ -70,11 +71,41 @@ export default function CreateItemScreen({ route, navigation }) {
   const [toastVisible, setToastVisible] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
   const [toastType, setToastType] = useState('success');
+  const [hoveredImageIndex, setHoveredImageIndex] = useState(null);
 
   const showToast = (message, type = 'success') => {
     setToastMessage(message);
     setToastType(type);
     setToastVisible(true);
+  };
+
+  const deleteImage = async (index, imageObj) => {
+    // Check if it's a server image (has uuid property) or local image (dataURL/blob)
+    const isServerImage = imageObj && typeof imageObj === 'object' && imageObj.uuid;
+    
+    const confirmDelete = window.confirm(
+      isServerImage 
+        ? 'Delete this photo from the server? This cannot be undone.'
+        : 'Remove this photo from the list?'
+    );
+    
+    if (!confirmDelete) return;
+
+    if (isServerImage) {
+      // Delete from server
+      try {
+        await axios.delete(`${API_URL}/items/${itemUuid}/image/${imageObj.uuid}`);
+        showToast('Photo deleted successfully', 'success');
+        // Remove from local state
+        setImages(images.filter((_, i) => i !== index));
+      } catch (error) {
+        showToast('Failed to delete photo: ' + error.message, 'error');
+      }
+    } else {
+      // Just remove from local state (not yet uploaded)
+      setImages(images.filter((_, i) => i !== index));
+      showToast('Photo removed', 'success');
+    }
   };
 
   const createItem = async () => {
@@ -449,11 +480,33 @@ export default function CreateItemScreen({ route, navigation }) {
       </TouchableOpacity>
       {images.length > 0 && (
         <ScrollView horizontal style={styles.imageScroll}>
-          {images.map((uri, index) => (
-            <Image key={index} source={{ uri }} style={styles.thumbnail} />
-          ))}
+          {images.map((imageData, index) => {
+            const uri = typeof imageData === 'string' ? imageData : `${API_URL}/images/${imageData.uuid}`;
+            const isHovered = hoveredImageIndex === index;
+            
+            return (
+              <View 
+                key={index} 
+                style={styles.thumbnailContainer}
+                onMouseEnter={() => Platform.OS === 'web' && setHoveredImageIndex(index)}
+                onMouseLeave={() => Platform.OS === 'web' && setHoveredImageIndex(null)}
+              >
+                <Image source={{ uri }} style={styles.thumbnail} />
+                {(isHovered || Platform.OS !== 'web') && (
+                  <TouchableOpacity
+                    style={styles.deleteButton}
+                    onPress={() => deleteImage(index, imageData)}
+                  >
+                    <View style={styles.deleteCircle}>
+                      <Ionicons name="close" size={16} color="white" />
+                    </View>
+                  </TouchableOpacity>
+                )}
+              </View>
+            );
+          })}
         </ScrollView>
-       )}
+      )}
      </ScrollView>
   );
 }
@@ -512,11 +565,30 @@ const styles = StyleSheet.create({
   imageScroll: {
     marginVertical: 10,
   },
+  thumbnailContainer: {
+    position: 'relative',
+    marginRight: 10,
+  },
   thumbnail: {
     width: 80,
     height: 80,
     borderRadius: 8,
-    marginRight: 10,
+  },
+  deleteButton: {
+    position: 'absolute',
+    top: -8,
+    right: -8,
+    zIndex: 10,
+  },
+  deleteCircle: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: colors.error,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: 'white',
   },
   quantityRow: {
     flexDirection: 'row',
