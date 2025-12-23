@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, Image, StyleSheet, Alert, ScrollView, Platform, Modal } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, Image, StyleSheet, Alert, ScrollView, Platform, Modal, Switch, FlatList } from 'react-native';
 import { Dimensions } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import * as ImagePicker from 'expo-image-picker';
@@ -25,7 +25,12 @@ export default function CreateItemScreen({ route, navigation }) {
   const [visibility, setVisibility] = useState(item.visibility || 'PRIVATE');
   const [description, setDescription] = useState(item.description || '');
   const [quantity, setQuantity] = useState(item.quantity?.toString() || '1');
+  const [nestable, setNestable] = useState(item.nestable || false);
   const [images, setImages] = useState([]);
+  const [selectedContainer, setSelectedContainer] = useState(null);
+  const [containerSearchQuery, setContainerSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [showContainerSearch, setShowContainerSearch] = useState(false);
   const [cameraOpen, setCameraOpen] = useState(false);
   const videoRef = useRef(null);
   const [itemUuid, setItemUuid] = useState(item.uuid || null);
@@ -57,8 +62,13 @@ export default function CreateItemScreen({ route, navigation }) {
       setVisibility(parseEnum(response.data.visibility, 'PRIVATE'));
       setDescription(response.data.description || '');
       setQuantity(response.data.quantity?.toString() || '1');
+      setNestable(response.data.nestable || false);
       // Store the full image object so we have the uuid for deletion
       setImages(response.data.images || []);
+      // Load container info if item is nested
+      if (response.data.locationEntityUUID) {
+        loadContainerInfo(response.data.locationEntityUUID);
+      }
     } catch (error) {
       showToast('Failed to load item details: ' + error.message, 'error');
     }
@@ -80,6 +90,47 @@ export default function CreateItemScreen({ route, navigation }) {
     setToastMessage(message);
     setToastType(type);
     setToastVisible(true);
+  };
+
+  const loadContainerInfo = async (containerUuid) => {
+    try {
+      const response = await axios.get(`${API_URL}/items/${containerUuid}`);
+      setSelectedContainer(response.data);
+    } catch (error) {
+      console.error('Failed to load container info:', error);
+    }
+  };
+
+  const searchContainers = async (query) => {
+    setContainerSearchQuery(query);
+    if (!query.trim()) {
+      setSearchResults([]);
+      return;
+    }
+    
+    try {
+      const response = await axios.get(`${API_URL}/items`);
+      // Filter for nestable items that match the search query
+      const results = response.data.filter(item => 
+        item.nestable && 
+        item.uuid !== itemUuid && // Don't allow nesting in itself
+        item.name.toLowerCase().includes(query.toLowerCase())
+      );
+      setSearchResults(results);
+    } catch (error) {
+      showToast('Failed to search containers: ' + error.message, 'error');
+    }
+  };
+
+  const selectContainer = (container) => {
+    setSelectedContainer(container);
+    setContainerSearchQuery('');
+    setSearchResults([]);
+    setShowContainerSearch(false);
+  };
+
+  const clearContainer = () => {
+    setSelectedContainer(null);
   };
 
   const deleteImage = (index, imageObj) => {
@@ -132,11 +183,20 @@ export default function CreateItemScreen({ route, navigation }) {
       return;
     }
     try {
-      const data = { name: name.trim(), type, visibility };
+      const data = { name: name.trim(), type, visibility, nestable };
       if (description.trim()) data.description = description.trim();
       if (quantity) data.quantity = parseInt(quantity);
       const response = await axios.post(`${API_URL}/items`, data);
       const newUuid = response.data.uuid;
+      
+      // Put item in container if selected
+      if (selectedContainer) {
+        try {
+          await axios.post(`${API_URL}/items/${newUuid}/store/${selectedContainer.uuid}`);
+        } catch (error) {
+          showToast('Item created but failed to add to container: ' + error.message, 'error');
+        }
+      }
       
       // Upload images if any
       if (images.length > 0) {
@@ -160,6 +220,8 @@ export default function CreateItemScreen({ route, navigation }) {
       setVisibility('PRIVATE');
       setDescription('');
       setQuantity('1');
+      setNestable(false);
+      setSelectedContainer(null);
       setImages([]);
     } catch (error) {
       showToast('Failed to create item: ' + error.message, 'error');
@@ -169,10 +231,19 @@ export default function CreateItemScreen({ route, navigation }) {
   const updateItem = async () => {
     if (!itemUuid) return;
     try {
-      const data = { name: name.trim(), type, visibility };
+      const data = { name: name.trim(), type, visibility, nestable };
       if (description.trim()) data.description = description.trim();
       if (quantity) data.quantity = parseInt(quantity);
       await axios.put(`${API_URL}/items/${itemUuid}`, data);
+      
+      // Update container if changed
+      if (selectedContainer) {
+        try {
+          await axios.post(`${API_URL}/items/${itemUuid}/store/${selectedContainer.uuid}`);
+        } catch (error) {
+          showToast('Item updated but failed to change container: ' + error.message, 'error');
+        }
+      }
       
       // Check if there are new local images to upload
       const hasNewImages = images.some(img => typeof img === 'string');
@@ -372,7 +443,11 @@ export default function CreateItemScreen({ route, navigation }) {
       let uploaded = false;
       for (let attempt = 1; attempt <= 3; attempt++) {
         try {
-          await axios.post(`${API_URL}/items/${uuid}/image`, data);
+          await axios.post(`${API_URL}/items/${uuid}/image`, data, {
+            timeout: 60000, // 60 second timeout for large images
+            maxContentLength: 200 * 1024 * 1024, // 200 MB
+            maxBodyLength: 200 * 1024 * 1024, // 200 MB
+          });
           uploaded = true;
           break;
         } catch (error) {
@@ -542,6 +617,63 @@ export default function CreateItemScreen({ route, navigation }) {
           <Text style={styles.quantityButtonText}>+</Text>
         </TouchableOpacity>
        </View>
+       
+       <View style={styles.nestableRow}>
+         <Text style={styles.nestableLabel}>Is this a storage container?</Text>
+         <Switch
+           value={nestable}
+           onValueChange={setNestable}
+           trackColor={{ false: '#767577', true: colors.primary }}
+           thumbColor={nestable ? '#fff' : '#f4f3f4'}
+         />
+       </View>
+       
+       <View style={styles.containerSection}>
+         <Text style={styles.sectionHeader}>Store in Container</Text>
+         {selectedContainer ? (
+           <View style={styles.selectedContainer}>
+             <Text style={styles.containerName}>{selectedContainer.name}</Text>
+             <TouchableOpacity onPress={clearContainer} style={styles.clearButton}>
+               <Ionicons name="close-circle" size={24} color={colors.error} />
+             </TouchableOpacity>
+           </View>
+         ) : (
+           <TouchableOpacity style={styles.searchButton} onPress={() => setShowContainerSearch(!showContainerSearch)}>
+             <Ionicons name="search" size={20} color={colors.primary} />
+             <Text style={styles.searchButtonText}>Search for container</Text>
+           </TouchableOpacity>
+         )}
+         
+         {showContainerSearch && (
+           <View style={styles.searchContainer}>
+             <TextInput
+               style={styles.searchInput}
+               placeholder="Type to search containers..."
+               value={containerSearchQuery}
+               onChangeText={searchContainers}
+               placeholderTextColor={colors.text}
+             />
+             {searchResults.length > 0 && (
+               <View style={styles.searchResults}>
+                 {searchResults.map((container) => (
+                   <TouchableOpacity
+                     key={container.uuid}
+                     style={styles.searchResultItem}
+                     onPress={() => selectContainer(container)}
+                   >
+                     <Text style={styles.searchResultText}>{container.name}</Text>
+                     <Text style={styles.searchResultType}>{container.type}</Text>
+                   </TouchableOpacity>
+                 ))}
+               </View>
+             )}
+             {containerSearchQuery.trim() && searchResults.length === 0 && (
+               <Text style={styles.noResults}>No nestable containers found</Text>
+             )}
+           </View>
+         )}
+       </View>
+       
        <TouchableOpacity style={styles.button} onPress={itemUuid ? updateItem : createItem}>
          <Text style={styles.buttonText}>{itemUuid ? 'Update Item' : 'Create Item'}</Text>
        </TouchableOpacity>
@@ -717,5 +849,104 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginHorizontal: 10,
+  },
+  nestableRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 15,
+    padding: 12,
+    backgroundColor: colors.card,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  nestableLabel: {
+    fontSize: 16,
+    color: colors.text,
+    fontWeight: '500',
+  },
+  containerSection: {
+    marginBottom: 15,
+  },
+  sectionHeader: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.text,
+    marginBottom: 10,
+  },
+  selectedContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 12,
+    backgroundColor: colors.card,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.primary,
+  },
+  containerName: {
+    fontSize: 16,
+    color: colors.text,
+    fontWeight: '500',
+  },
+  clearButton: {
+    padding: 4,
+  },
+  searchButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    backgroundColor: colors.card,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  searchButtonText: {
+    fontSize: 16,
+    color: colors.primary,
+    marginLeft: 8,
+  },
+  searchContainer: {
+    marginTop: 10,
+  },
+  searchInput: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.card,
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 16,
+    color: colors.text,
+  },
+  searchResults: {
+    marginTop: 8,
+    maxHeight: 200,
+    backgroundColor: colors.card,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  searchResultItem: {
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  searchResultText: {
+    fontSize: 16,
+    color: colors.text,
+    fontWeight: '500',
+  },
+  searchResultType: {
+    fontSize: 14,
+    color: colors.text,
+    opacity: 0.6,
+    marginTop: 2,
+  },
+  noResults: {
+    padding: 12,
+    textAlign: 'center',
+    color: colors.text,
+    opacity: 0.6,
   },
 });

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, FlatList, StyleSheet, TouchableOpacity, Image, ScrollView, Platform } from 'react-native';
 import axios from 'axios';
 import colors from '../constants/colors';
+import { Ionicons } from '@expo/vector-icons';
 
 const API_URL = Platform.OS === 'web' 
   ? (typeof window !== 'undefined' && window.location.origin.includes('boxbuddy.walther.haus') 
@@ -11,6 +12,7 @@ const API_URL = Platform.OS === 'web'
 
 export default function ListItemsScreen({ navigation }) {
   const [items, setItems] = useState([]);
+  const [containers, setContainers] = useState({});
 
   useEffect(() => {
     fetchItems();
@@ -20,6 +22,13 @@ export default function ListItemsScreen({ navigation }) {
     try {
       const response = await axios.get(`${API_URL}/items`);
       setItems(response.data);
+      
+      // Build a map of container UUIDs to names for quick lookup
+      const containerMap = {};
+      response.data.forEach(item => {
+        containerMap[item.uuid] = item.name;
+      });
+      setContainers(containerMap);
     } catch (error) {
       console.error('Error fetching items:', error);
     }
@@ -27,9 +36,23 @@ export default function ListItemsScreen({ navigation }) {
 
   const renderItem = ({ item }) => (
     <TouchableOpacity style={styles.card} onPress={() => navigation.navigate('Create Item', { item })}>
-      <Text style={styles.title}>{item.name}</Text>
+      <View style={styles.titleRow}>
+        <Text style={styles.title}>{item.name}</Text>
+        {item.nestable && (
+          <View style={styles.nestableBadge}>
+            <Ionicons name="archive" size={16} color={colors.primary} />
+            <Text style={styles.nestableText}>Container</Text>
+          </View>
+        )}
+      </View>
       <Text style={styles.subtitle}>Type: {item.type}</Text>
       <Text style={styles.subtitle}>Visibility: {item.visibility}</Text>
+      {item.locationEntityUUID && containers[item.locationEntityUUID] && (
+        <View style={styles.containerInfo}>
+          <Ionicons name="folder-open" size={14} color={colors.primary} />
+          <Text style={styles.containerText}>In: {containers[item.locationEntityUUID]}</Text>
+        </View>
+      )}
       <Text style={styles.subtitle}>Created: {new Date(item.creation_time).toLocaleDateString()}</Text>
       {item.images && item.images.length > 0 && (
         <ScrollView horizontal style={styles.imageScroll}>
@@ -81,11 +104,42 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 5,
+  },
   title: {
     fontSize: 18,
     fontWeight: 'bold',
     color: colors.text,
-    marginBottom: 5,
+    flex: 1,
+  },
+  nestableBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.primary + '20',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  nestableText: {
+    fontSize: 12,
+    color: colors.primary,
+    fontWeight: '600',
+    marginLeft: 4,
+  },
+  containerInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  containerText: {
+    fontSize: 14,
+    color: colors.primary,
+    fontWeight: '500',
+    marginLeft: 4,
   },
   subtitle: {
     fontSize: 14,
