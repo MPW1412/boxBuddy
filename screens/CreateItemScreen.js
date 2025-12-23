@@ -174,13 +174,14 @@ export default function CreateItemScreen({ route, navigation }) {
       if (quantity) data.quantity = parseInt(quantity);
       await axios.put(`${API_URL}/items/${itemUuid}`, data);
       
-      // Upload new images if any (will be added to existing)
-      if (images.length > 0) {
+      // Check if there are new local images to upload
+      const hasNewImages = images.some(img => typeof img === 'string');
+      
+      if (hasNewImages) {
         try {
           await uploadImages(itemUuid);
           showToast('Item updated and photos uploaded successfully!', 'success');
-          // Clear local images after successful upload, then refetch
-          setImages([]);
+          // Refetch to get all images including newly uploaded ones
           await fetchItemDetails();
         } catch (error) {
           // Upload failed after retries, keep form unchanged
@@ -302,19 +303,20 @@ export default function CreateItemScreen({ route, navigation }) {
   const uploadImages = async (uuid) => {
     if (!uuid || images.length === 0) return;
 
-    for (const imageUri of images) {
+    // Filter out server images (objects with uuid) - only upload new local images
+    const localImages = images.filter(img => typeof img === 'string');
+    
+    if (localImages.length === 0) return;
+
+    for (const imageUri of localImages) {
       let data;
-      if (Platform.OS === 'web') {
-        if (imageUri.startsWith('data:')) {
-          data = { image: imageUri };
-        } else if (imageUri.startsWith('blob:')) {
-          const response = await fetch(imageUri);
-          const blob = await response.blob();
-          const dataURL = await blobToDataURL(blob);
-          data = { image: dataURL };
-        } else {
-          continue;
-        }
+      if (Platform.OS === 'web' && imageUri.startsWith('data:')) {
+        data = { image: imageUri };
+      } else if (Platform.OS === 'web' && imageUri.startsWith('blob:')) {
+        const response = await fetch(imageUri);
+        const blob = await response.blob();
+        const dataURL = await blobToDataURL(blob);
+        data = { image: dataURL };
       } else {
         // For native, could convert to base64, but skipping for now
         continue;
