@@ -1,9 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, FlatList, StyleSheet, TouchableOpacity, Image, ScrollView } from 'react-native';
+import { View, Text, FlatList, StyleSheet, TouchableOpacity, Image, ScrollView, Platform } from 'react-native';
 import axios from 'axios';
 import colors from '../constants/colors';
 
-const API_URL = 'http://localhost:5000';
+const API_URL = Platform.OS === 'web' 
+  ? (typeof window !== 'undefined' && window.location.origin.includes('boxbuddy.walther.haus') 
+      ? 'https://boxbuddy.walther.haus/api' 
+      : 'http://localhost:5000')
+  : 'http://localhost:5000';
 
 export default function ListItemsScreen({ navigation }) {
   const [items, setItems] = useState([]);

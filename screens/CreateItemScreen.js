@@ -9,7 +9,11 @@ import { Ionicons } from '@expo/vector-icons';
 import ReactCrop from 'react-image-crop';
 import 'react-image-crop/dist/ReactCrop.css';
 
-const API_URL = 'http://localhost:5000';
+const API_URL = Platform.OS === 'web' 
+  ? (typeof window !== 'undefined' && window.location.origin.includes('boxbuddy.walther.haus') 
+      ? 'https://boxbuddy.walther.haus/api' 
+      : 'http://localhost:5000')
+  : 'http://localhost:5000';
 const { height } = Dimensions.get('window');
 
 export default function CreateItemScreen({ route, navigation }) {
