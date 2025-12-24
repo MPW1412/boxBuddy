@@ -9,10 +9,13 @@ export default function Sidebar({ navigation }) {
       <TouchableOpacity style={styles.createItem} onPress={() => navigation && navigation.navigate('Create Item')}>
         <Ionicons name="add-circle" size={40} color={colors.card} />
       </TouchableOpacity>
-      <TouchableOpacity style={styles.listItem} onPress={() => navigation && navigation.navigate('List Items')}>
-        <Ionicons name="list" size={40} color={colors.card} />
-      </TouchableOpacity>
-    </View>
+       <TouchableOpacity style={styles.listItem} onPress={() => navigation && navigation.navigate('List Items')}>
+         <Ionicons name="list" size={40} color={colors.card} />
+       </TouchableOpacity>
+       <TouchableOpacity style={styles.binItem} onPress={() => navigation && navigation.navigate('Bin')}>
+         <Ionicons name="trash-outline" size={40} color={colors.card} />
+       </TouchableOpacity>
+     </View>
   );
 }
 
@@ -39,6 +42,14 @@ const styles = StyleSheet.create({
     padding: 10,
     marginVertical: 3,
     backgroundColor: '#0092cc',
+    borderRadius: 8,
+  },
+  binItem: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 10,
+    marginVertical: 3,
+    backgroundColor: '#666666',
     borderRadius: 8,
   },
   text: {

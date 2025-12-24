@@ -5,6 +5,7 @@ import { createStackNavigator } from '@react-navigation/stack';
 import CreateItemScreen from './screens/CreateItemScreen';
 import ListItemsScreen from './screens/ListItemsScreen';
 import ItemDetailScreen from './screens/ItemDetailScreen';
+import BinScreen from './screens/BinScreen';
 import Sidebar from './components/Sidebar';
 
 const Stack = createStackNavigator();
@@ -22,6 +23,7 @@ export default function App() {
             <Stack.Screen name="Create Item" component={CreateItemScreen} />
             <Stack.Screen name="List Items" component={ListItemsScreen} />
             <Stack.Screen name="Item Detail" component={ItemDetailScreen} />
+            <Stack.Screen name="Bin" component={BinScreen} />
           </Stack.Navigator>
         </View>
       </View>

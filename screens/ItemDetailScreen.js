@@ -3,6 +3,8 @@ import { View, Text, StyleSheet, TouchableOpacity, Image, ScrollView, Platform }
 import axios from 'axios';
 import colors from '../constants/colors';
 import { Ionicons } from '@expo/vector-icons';
+import Toast from '../components/Toast';
+import ConfirmDialog from '../components/ConfirmDialog';
 
 const API_URL = Platform.OS === 'web'
   ? (typeof window !== 'undefined' && window.location.origin.includes('boxbuddy.walther.haus')
@@ -15,6 +17,10 @@ export default function ItemDetailScreen({ route, navigation }) {
   const [detailedItem, setDetailedItem] = useState(item);
   const [containedItems, setContainedItems] = useState([]);
   const [containerName, setContainerName] = useState(null);
+  const [confirmDialogVisible, setConfirmDialogVisible] = useState(false);
+  const [toastVisible, setToastVisible] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
+  const [toastType, setToastType] = useState('success');
 
   useEffect(() => {
     fetchDetailedItem();
@@ -51,6 +57,23 @@ export default function ItemDetailScreen({ route, navigation }) {
     }
   };
 
+  const deleteItem = async () => {
+    try {
+      await axios.delete(`${API_URL}/items/${detailedItem.uuid}`);
+      showToast('Item moved to bin', 'success');
+      navigation.goBack(); // Go back to list after deleting
+    } catch (error) {
+      showToast('Failed to delete item: ' + error.message, 'error');
+    }
+    setConfirmDialogVisible(false);
+  };
+
+  const showToast = (message, type = 'success') => {
+    setToastMessage(message);
+    setToastType(type);
+    setToastVisible(true);
+  };
+
   const renderItem = ({ item: containedItem }) => (
     <TouchableOpacity
       style={styles.containedItemCard}
@@ -76,17 +99,25 @@ export default function ItemDetailScreen({ route, navigation }) {
 
   return (
     <ScrollView style={styles.container}>
-      {/* Header with Edit Button */}
+      {/* Header with Edit and Delete Buttons */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Ionicons name="arrow-back" size={24} color={colors.primary} />
         </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.editButton}
-          onPress={() => navigation.navigate('Create Item', { item: detailedItem })}
-        >
-          <Ionicons name="pencil" size={20} color="white" />
-        </TouchableOpacity>
+        <View style={styles.headerButtons}>
+          <TouchableOpacity
+            style={styles.editButton}
+            onPress={() => navigation.navigate('Create Item', { item: detailedItem })}
+          >
+            <Ionicons name="pencil" size={20} color="white" />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.deleteButton}
+            onPress={() => setConfirmDialogVisible(true)}
+          >
+            <Ionicons name="trash" size={20} color="white" />
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Item Details */}
@@ -174,6 +205,19 @@ export default function ItemDetailScreen({ route, navigation }) {
           )}
         </View>
       )}
+      <Toast
+        visible={toastVisible}
+        message={toastMessage}
+        type={toastType}
+        onHide={() => setToastVisible(false)}
+      />
+      <ConfirmDialog
+        visible={confirmDialogVisible}
+        title="Move to Bin"
+        message={`Move "${detailedItem.name}" to the bin? You can restore it later from the bin.`}
+        onConfirm={deleteItem}
+        onCancel={() => setConfirmDialogVisible(false)}
+      />
     </ScrollView>
   );
 }
@@ -190,8 +234,20 @@ const styles = StyleSheet.create({
     padding: 20,
     paddingTop: 40,
   },
+  headerButtons: {
+    flexDirection: 'row',
+    gap: 10,
+  },
   editButton: {
     backgroundColor: '#14d91d',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  deleteButton: {
+    backgroundColor: colors.error,
     width: 40,
     height: 40,
     borderRadius: 20,
