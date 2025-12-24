@@ -4,6 +4,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import CreateItemScreen from './screens/CreateItemScreen';
 import ListItemsScreen from './screens/ListItemsScreen';
+import ItemDetailScreen from './screens/ItemDetailScreen';
 import Sidebar from './components/Sidebar';
 
 const Stack = createStackNavigator();
@@ -20,6 +21,7 @@ export default function App() {
           <Stack.Navigator initialRouteName="List Items" screenOptions={{ headerShown: false }}>
             <Stack.Screen name="Create Item" component={CreateItemScreen} />
             <Stack.Screen name="List Items" component={ListItemsScreen} />
+            <Stack.Screen name="Item Detail" component={ItemDetailScreen} />
           </Stack.Navigator>
         </View>
       </View>
