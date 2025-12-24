@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, FlatList, StyleSheet, TouchableOpacity, Image, ScrollView, Platform } from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, Text, FlatList, StyleSheet, TouchableOpacity, Image, ScrollView, Platform, TextInput, ActivityIndicator } from 'react-native';
 import axios from 'axios';
 import colors from '../constants/colors';
 import { Ionicons } from '@expo/vector-icons';
@@ -13,25 +13,83 @@ const API_URL = Platform.OS === 'web'
 export default function ListItemsScreen({ navigation }) {
   const [items, setItems] = useState([]);
   const [containers, setContainers] = useState({});
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const [offset, setOffset] = useState(0);
+  const LIMIT = 15;
 
   useEffect(() => {
-    fetchItems();
+    fetchItems(true);
   }, []);
 
-  const fetchItems = async () => {
+  useEffect(() => {
+    // Debounce search
+    const timeoutId = setTimeout(() => {
+      fetchItems(true);
+    }, 300);
+    return () => clearTimeout(timeoutId);
+  }, [searchQuery]);
+
+  const fetchItems = async (reset = false) => {
+    if ((isLoading || isLoadingMore) && !reset) return;
+    
+    const currentOffset = reset ? 0 : offset;
+    
+    if (reset) {
+      setIsLoading(true);
+    } else {
+      setIsLoadingMore(true);
+    }
+
     try {
-      const response = await axios.get(`${API_URL}/items`);
-      setItems(response.data);
+      const params = {
+        limit: LIMIT,
+        offset: currentOffset,
+      };
+      
+      if (searchQuery) {
+        params.q = searchQuery;
+      }
+
+      const response = await axios.get(`${API_URL}/items`, { params });
+      
+      if (reset) {
+        setItems(response.data);
+        setOffset(LIMIT);
+      } else {
+        setItems([...items, ...response.data]);
+        setOffset(currentOffset + LIMIT);
+      }
+      
+      // Check if there are more items to load
+      setHasMore(response.data.length === LIMIT);
       
       // Build a map of container UUIDs to names for quick lookup
-      const containerMap = {};
+      const containerMap = { ...containers };
       response.data.forEach(item => {
         containerMap[item.uuid] = item.name;
       });
       setContainers(containerMap);
     } catch (error) {
       console.error('Error fetching items:', error);
+    } finally {
+      setIsLoading(false);
+      setIsLoadingMore(false);
     }
+  };
+
+  const handleLoadMore = () => {
+    if (hasMore && !isLoadingMore) {
+      fetchItems(false);
+    }
+  };
+
+  const handleRefresh = () => {
+    setOffset(0);
+    setHasMore(true);
+    fetchItems(true);
   };
 
   const renderItem = ({ item }) => (
@@ -64,15 +122,61 @@ export default function ListItemsScreen({ navigation }) {
     </TouchableOpacity>
   );
 
+  const renderFooter = () => {
+    if (!isLoadingMore) return null;
+    return (
+      <View style={styles.footer}>
+        <ActivityIndicator size="small" color={colors.primary} />
+      </View>
+    );
+  };
+
+  const renderEmpty = () => {
+    if (isLoading) return null;
+    return (
+      <View style={styles.emptyContainer}>
+        <Ionicons name="search-outline" size={64} color={colors.text} opacity={0.3} />
+        <Text style={styles.emptyText}>
+          {searchQuery ? 'No items found' : 'No items yet'}
+        </Text>
+        {searchQuery && (
+          <Text style={styles.emptySubtext}>Try a different search term</Text>
+        )}
+      </View>
+    );
+  };
+
   return (
     <View style={styles.container}>
       <Text style={styles.header}>Your Items</Text>
+      
+      {/* Search Bar */}
+      <View style={styles.searchContainer}>
+        <Ionicons name="search" size={20} color={colors.text} style={styles.searchIcon} />
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Search items..."
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          placeholderTextColor={colors.text + '80'}
+        />
+        {searchQuery.length > 0 && (
+          <TouchableOpacity onPress={() => setSearchQuery('')} style={styles.clearButton}>
+            <Ionicons name="close-circle" size={20} color={colors.text} />
+          </TouchableOpacity>
+        )}
+      </View>
+
       <FlatList
         data={items}
         renderItem={renderItem}
         keyExtractor={(item) => item.uuid}
-        refreshing={false}
-        onRefresh={fetchItems}
+        refreshing={isLoading}
+        onRefresh={handleRefresh}
+        onEndReached={handleLoadMore}
+        onEndReachedThreshold={0.5}
+        ListFooterComponent={renderFooter}
+        ListEmptyComponent={renderEmpty}
       />
     </View>
   );
@@ -155,5 +259,51 @@ const styles = StyleSheet.create({
     height: 60,
     borderRadius: 5,
     marginRight: 5,
+  },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.card,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginHorizontal: 10,
+    marginBottom: 15,
+    paddingHorizontal: 12,
+  },
+  searchIcon: {
+    marginRight: 8,
+    opacity: 0.6,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 16,
+    color: colors.text,
+    paddingVertical: 12,
+  },
+  clearButton: {
+    padding: 4,
+  },
+  footer: {
+    paddingVertical: 20,
+    alignItems: 'center',
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 60,
+  },
+  emptyText: {
+    fontSize: 18,
+    color: colors.text,
+    opacity: 0.6,
+    marginTop: 20,
+  },
+  emptySubtext: {
+    fontSize: 14,
+    color: colors.text,
+    opacity: 0.4,
+    marginTop: 8,
   },
 });
