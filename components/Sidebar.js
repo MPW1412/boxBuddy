@@ -33,7 +33,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: 10,
     marginVertical: 3,
-    backgroundColor: '#c30913',
+    backgroundColor: colors.primary,
     borderRadius: 8,
   },
   listItem: {
