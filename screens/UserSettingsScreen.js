@@ -7,8 +7,7 @@ import {
   StyleSheet,
   ScrollView,
   Alert,
-  ActivityIndicator,
-  Platform
+  ActivityIndicator
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../contexts/AuthContext';
@@ -47,11 +46,7 @@ export default function UserSettingsScreen({ navigation }) {
       
       await updateUser(updates);
       
-      if (Platform.OS === 'web') {
-        alert('Profile updated successfully!');
-      } else {
-        Alert.alert('Success', 'Profile updated successfully!');
-      }
+      Alert.alert('Success', 'Profile updated successfully!');
       
       setNewPassword('');
       setConfirmPassword('');
@@ -74,11 +69,7 @@ export default function UserSettingsScreen({ navigation }) {
     try {
       await createEntity(newEntityName);
       
-      if (Platform.OS === 'web') {
-        alert('Entity created successfully!');
-      } else {
-        Alert.alert('Success', 'Entity created successfully!');
-      }
+      Alert.alert('Success', 'Entity created successfully!');
       
       setNewEntityName('');
     } catch (err) {
@@ -94,20 +85,14 @@ export default function UserSettingsScreen({ navigation }) {
       // Navigation will happen automatically when user state changes
     };
     
-    if (Platform.OS === 'web') {
-      if (confirm('Are you sure you want to logout?')) {
-        confirmLogout();
-      }
-    } else {
-      Alert.alert(
-        'Logout',
-        'Are you sure you want to logout?',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Logout', onPress: confirmLogout, style: 'destructive' }
-        ]
-      );
-    }
+    Alert.alert(
+      'Logout',
+      'Are you sure you want to logout?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Logout', onPress: confirmLogout, style: 'destructive' }
+      ]
+    );
   };
 
   return (
