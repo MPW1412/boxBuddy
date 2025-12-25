@@ -150,9 +150,7 @@ export default function Sidebar({ navigation, pinnedContainers = [], onRemovePin
             marginTop: 3,
             marginBottom: 3,
             borderRadius: 8,
-            borderWidth: 2,
-            borderStyle: 'solid',
-            borderColor: isDropTarget ? '#14d91d' : 'transparent',
+            border: isDropTarget ? '2px solid #14d91d' : '2px solid transparent',
             backgroundColor: isDropTarget ? 'rgba(20, 217, 29, 0.1)' : 'transparent',
             transition: 'all 0.2s ease',
           }}
@@ -189,9 +187,9 @@ export default function Sidebar({ navigation, pinnedContainers = [], onRemovePin
           onDragLeave={handlePinZoneDragLeave}
           style={{
             position: 'relative',
-            marginTop: 6,
-            marginBottom: 6,
-            minHeight: dragOverPinZone ? 80 : 6,
+            marginTop: 3,
+            marginBottom: 3,
+            minHeight: dragOverPinZone ? 74 : 0,
             transition: 'min-height 0.2s ease',
           }}
         >
@@ -200,7 +198,7 @@ export default function Sidebar({ navigation, pinnedContainers = [], onRemovePin
               style={{
                 position: 'absolute',
                 top: 0,
-                left: 3,
+                left: 0,
                 width: 74,
                 height: 74,
                 borderRadius: 8,
