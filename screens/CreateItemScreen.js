@@ -615,7 +615,14 @@ export default function CreateItemScreen({ route, navigation }) {
     return (
       <Modal visible={cropModalVisible} animationType="slide">
         <View style={styles.cameraFullScreen}>
-          <View style={{ height: height * 0.7 }}>
+          <div style={{ 
+            height: 'calc(100vh - 150px)', 
+            width: '100%', 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'center',
+            overflow: 'hidden'
+          }}>
             <ReactCrop
               crop={crop}
               onChange={(newCrop) => setCrop(newCrop)}
@@ -626,9 +633,9 @@ export default function CreateItemScreen({ route, navigation }) {
                 setImageRef(e.target);
                 setImageSize({ width: e.target.offsetWidth, height: e.target.offsetHeight, naturalWidth: e.target.naturalWidth, naturalHeight: e.target.naturalHeight });
                 setImageLoaded(true);
-              }} style={{ width: '100%', height: 'auto' }} />
+              }} style={{ maxWidth: '100%', maxHeight: 'calc(100vh - 150px)', objectFit: 'contain', display: 'block' }} />
             </ReactCrop>
-          </View>
+          </div>
           <View style={styles.cameraControls}>
             <TouchableOpacity style={styles.cameraButton} onPress={() => setCropModalVisible(false)}>
               <Ionicons name="close" size={30} color="white" />
@@ -977,6 +984,16 @@ const styles = StyleSheet.create({
     backgroundColor: 'black',
     justifyContent: 'center',
     alignItems: 'center',
+    padding: 20,
+  },
+  cropContainer: {
+    height: 'calc(100vh - 200px)',
+    width: '95vw',
+    maxWidth: '100%',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
   },
   cameraControls: {
     flexDirection: 'row',
