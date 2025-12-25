@@ -307,16 +307,17 @@ export default function CreateItemScreen({ route, navigation }) {
       const data = { name: name.trim(), type, visibility, nestable };
       if (description.trim()) data.description = description.trim();
       if (quantity) data.quantity = parseInt(quantity);
-      await axios.put(`${API_URL}/items/${itemUuid}`, data);
       
-      // Update container if changed
-      if (selectedContainer) {
-        try {
-          await axios.post(`${API_URL}/items/${itemUuid}/store/${selectedContainer.uuid}`);
-        } catch (error) {
-          showToast('Item updated but failed to change container: ' + error.message, 'error');
-        }
+      // Handle container changes
+      const originalContainerUuid = originalData?.containerUuid || null;
+      const newContainerUuid = selectedContainer?.uuid || null;
+      
+      // If container changed, update it
+      if (originalContainerUuid !== newContainerUuid) {
+        data.locationEntityUUID = newContainerUuid;
       }
+      
+      await axios.put(`${API_URL}/items/${itemUuid}`, data);
       
       // Delete marked images from server
       if (imagesToDelete.length > 0) {
