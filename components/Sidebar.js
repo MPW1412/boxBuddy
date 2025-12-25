@@ -188,18 +188,19 @@ export default function Sidebar({ navigation, pinnedContainers = [], onRemovePin
           onDragOver={handlePinZoneDragOver}
           onDragLeave={handlePinZoneDragLeave}
           style={{
+            position: 'relative',
             marginTop: 6,
             marginBottom: 6,
-            minHeight: 80,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            transition: 'all 0.3s ease',
+            minHeight: dragOverPinZone ? 80 : 6,
+            transition: 'min-height 0.2s ease',
           }}
         >
           {dragOverPinZone && (
             <div
               style={{
+                position: 'absolute',
+                top: 0,
+                left: 3,
                 width: 74,
                 height: 74,
                 borderRadius: 8,
