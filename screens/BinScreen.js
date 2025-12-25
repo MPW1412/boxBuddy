@@ -69,9 +69,30 @@ export default function BinScreen({ navigation }) {
     setConfirmDialogVisible(true);
   };
 
+  const handleEmptyBin = () => {
+    setConfirmDialogData({
+      action: 'empty'
+    });
+    setConfirmDialogVisible(true);
+  };
+
+  const emptyBin = async () => {
+    try {
+      const response = await axios.delete(`${API_URL}/bin/empty`);
+      showToast(`Permanently deleted ${response.data.deleted_count} items`, 'success');
+      fetchBinItems(); // Refresh the list
+    } catch (error) {
+      showToast('Failed to empty bin: ' + error.message, 'error');
+    }
+    setConfirmDialogVisible(false);
+    setConfirmDialogData(null);
+  };
+
   const handleConfirmAction = () => {
     if (confirmDialogData.action === 'delete') {
       permanentDeleteItem(confirmDialogData.item.uuid);
+    } else if (confirmDialogData.action === 'empty') {
+      emptyBin();
     }
   };
 
@@ -124,8 +145,12 @@ export default function BinScreen({ navigation }) {
       />
       <ConfirmDialog
         visible={confirmDialogVisible}
-        title="Permanently Delete"
-        message={`Permanently delete "${confirmDialogData?.item?.name}"? This action cannot be undone and will also delete all associated photos.`}
+        title={confirmDialogData?.action === 'empty' ? 'Empty Bin' : 'Permanently Delete'}
+        message={
+          confirmDialogData?.action === 'empty'
+            ? `Permanently delete ALL ${binItems.length} items in the bin? This action cannot be undone and will delete all associated photos.`
+            : `Permanently delete "${confirmDialogData?.item?.name}"? This action cannot be undone and will also delete all associated photos.`
+        }
         onConfirm={handleConfirmAction}
         onCancel={() => {
           setConfirmDialogVisible(false);
@@ -138,7 +163,16 @@ export default function BinScreen({ navigation }) {
           <Ionicons name="arrow-back" size={24} color={colors.primary} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Bin</Text>
-        <View style={{ width: 24 }} />
+        {binItems.length > 0 ? (
+          <TouchableOpacity 
+            style={styles.emptyBinButton}
+            onPress={handleEmptyBin}
+          >
+            <Ionicons name="trash-bin" size={24} color="white" />
+          </TouchableOpacity>
+        ) : (
+          <View style={{ width: 40 }} />
+        )}
       </View>
 
       {binItems.length > 0 ? (
@@ -179,6 +213,14 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: 'bold',
     color: colors.text,
+  },
+  emptyBinButton: {
+    backgroundColor: colors.error,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   listContainer: {
     padding: 20,
