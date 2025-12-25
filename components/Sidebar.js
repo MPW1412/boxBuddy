@@ -61,14 +61,8 @@ export default function Sidebar({ navigation, pinnedContainers = [], onRemovePin
     const hasImage = container.images && container.images.length > 0;
     const isDropTarget = dragOverContainer === container.uuid;
     
-    return (
-      <View
-        key={container.uuid}
-        style={[styles.containerItem, isDropTarget && styles.containerItemDragOver]}
-        onDrop={(e) => handleDrop(e, container.uuid)}
-        onDragOver={(e) => handleDragOver(e, container.uuid)}
-        onDragLeave={handleDragLeave}
-      >
+    const buttonContent = (
+      <>
         <TouchableOpacity 
           style={styles.containerButton}
           onPress={() => navigation && navigation.navigate('Item Detail', { uuid: container.uuid })}
@@ -94,6 +88,37 @@ export default function Sidebar({ navigation, pinnedContainers = [], onRemovePin
         >
           <Ionicons name="close-circle" size={16} color={colors.error} />
         </TouchableOpacity>
+      </>
+    );
+
+    // For web, use a div as drop zone
+    if (Platform.OS === 'web') {
+      return (
+        <div
+          key={container.uuid}
+          onDrop={(e) => handleDrop(e, container.uuid)}
+          onDragOver={(e) => handleDragOver(e, container.uuid)}
+          onDragLeave={handleDragLeave}
+          style={{
+            position: 'relative',
+            marginTop: 3,
+            marginBottom: 3,
+            borderRadius: 8,
+            borderWidth: 2,
+            borderStyle: 'solid',
+            borderColor: isDropTarget ? '#14d91d' : 'transparent',
+            backgroundColor: isDropTarget ? 'rgba(20, 217, 29, 0.1)' : 'transparent',
+            transition: 'all 0.2s ease',
+          }}
+        >
+          {buttonContent}
+        </div>
+      );
+    }
+
+    return (
+      <View key={container.uuid} style={styles.containerItem}>
+        {buttonContent}
       </View>
     );
   };

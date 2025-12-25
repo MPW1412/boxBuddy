@@ -114,12 +114,8 @@ export default function ListItemsScreen({ navigation, onPinContainer }) {
     }
   };
 
-  const renderItem = ({ item }) => (
-    <View
-      draggable={Platform.OS === 'web'}
-      onDragStart={(e) => handleDragStart(e, item)}
-      style={styles.cardWrapper}
-    >
+  const renderItem = ({ item }) => {
+    const cardContent = (
       <TouchableOpacity style={styles.card} onPress={() => navigation.navigate('Item Detail', { uuid: item.uuid })}>
         <View style={styles.titleRow}>
           <Text style={styles.title}>{item.name}</Text>
@@ -161,9 +157,24 @@ export default function ListItemsScreen({ navigation, onPinContainer }) {
           ))}
         </ScrollView>
       )}
-      </TouchableOpacity>
-    </View>
-  );
+    </TouchableOpacity>
+    );
+
+    // For web, wrap in a draggable div
+    if (Platform.OS === 'web') {
+      return (
+        <div
+          draggable="true"
+          onDragStart={(e) => handleDragStart(e, item)}
+          style={{ cursor: 'grab', marginBottom: 10 }}
+        >
+          {cardContent}
+        </div>
+      );
+    }
+
+    return cardContent;
+  };
 
   const renderFooter = () => {
     if (!isLoadingMore) return null;
