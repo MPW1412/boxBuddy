@@ -710,7 +710,7 @@ export default function CreateItemScreen({ route, navigation }) {
                 onMouseEnter={() => Platform.OS === 'web' && setHoveredImageIndex(index)}
                 onMouseLeave={() => Platform.OS === 'web' && setHoveredImageIndex(null)}
               >
-                <Image source={{ uri }} style={styles.thumbnail} />
+                <Image source={{ uri }} style={styles.thumbnail} resizeMode="contain" />
                 {(isHovered || Platform.OS !== 'web') && (
                   <TouchableOpacity
                     style={styles.deleteButton}
