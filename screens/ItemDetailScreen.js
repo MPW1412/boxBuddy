@@ -145,6 +145,10 @@ export default function ItemDetailScreen({ route, navigation }) {
           <Text style={styles.statText}>
             Created: {new Date(detailedItem.creation_time).toLocaleDateString()}
           </Text>
+          <View style={styles.uuidContainer}>
+            <Text style={styles.uuidLabel}>UUID:</Text>
+            <Text style={styles.uuidText}>{detailedItem.uuid}</Text>
+          </View>
           {detailedItem.nestable && (
             <View style={styles.nestableBadge}>
               <Ionicons name="archive" size={16} color={colors.primary} />
@@ -311,6 +315,22 @@ const styles = StyleSheet.create({
     color: colors.text,
     opacity: 0.8,
     marginBottom: 5,
+  },
+  uuidContainer: {
+    marginTop: 5,
+    marginBottom: 5,
+  },
+  uuidLabel: {
+    fontSize: 12,
+    color: colors.text,
+    opacity: 0.6,
+    marginBottom: 2,
+  },
+  uuidText: {
+    fontSize: 11,
+    color: colors.text,
+    opacity: 0.5,
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
   },
   nestableBadge: {
     flexDirection: 'row',
