@@ -19,6 +19,7 @@ export default function ItemDetailScreen({ route, navigation }) {
   const [detailedItem, setDetailedItem] = useState(item);
   const [containedItems, setContainedItems] = useState([]);
   const [containerName, setContainerName] = useState(null);
+  const [containerItem, setContainerItem] = useState(null);
   const [confirmDialogVisible, setConfirmDialogVisible] = useState(false);
   const [toastVisible, setToastVisible] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
@@ -36,10 +37,11 @@ export default function ItemDetailScreen({ route, navigation }) {
       const response = await axios.get(`${API_URL}/items/${item.uuid}`);
       setDetailedItem(response.data);
 
-      // If item is nested, fetch container name
+      // If item is nested, fetch container details
       if (response.data.locationEntityUUID) {
         const containerResponse = await axios.get(`${API_URL}/items/${response.data.locationEntityUUID}`);
         setContainerName(containerResponse.data.name);
+        setContainerItem(containerResponse.data);
       }
 
       // If item is nestable, fetch contained items
@@ -155,11 +157,15 @@ export default function ItemDetailScreen({ route, navigation }) {
           <Text style={styles.itemVisibility}>{detailedItem.visibility}</Text>
         </View>
 
-        {containerName && (
-          <View style={styles.containerInfo}>
+        {containerName && containerItem && (
+          <TouchableOpacity 
+            style={styles.containerInfo}
+            onPress={() => navigation.push('Item Detail', { item: containerItem })}
+          >
             <Ionicons name="folder-open" size={16} color={colors.primary} />
             <Text style={styles.containerText}>Stored in: {containerName}</Text>
-          </View>
+            <Ionicons name="chevron-forward" size={16} color={colors.primary} />
+          </TouchableOpacity>
         )}
 
         {detailedItem.description && (

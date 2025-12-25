@@ -74,10 +74,10 @@ export default function ListItemsScreen({ navigation }) {
       // Check if there are more items to load
       setHasMore(response.data.length === LIMIT);
       
-      // Build a map of container UUIDs to names for quick lookup
+      // Build a map of container UUIDs to full item objects for quick lookup
       const containerMap = { ...containers };
       response.data.forEach(item => {
-        containerMap[item.uuid] = item.name;
+        containerMap[item.uuid] = item;
       });
       setContainers(containerMap);
     } catch (error) {
@@ -114,10 +114,17 @@ export default function ListItemsScreen({ navigation }) {
       <Text style={styles.subtitle}>Type: {item.type}</Text>
       <Text style={styles.subtitle}>Visibility: {item.visibility}</Text>
       {item.locationEntityUUID && containers[item.locationEntityUUID] && (
-        <View style={styles.containerInfo}>
+        <TouchableOpacity 
+          style={styles.containerInfo}
+          onPress={(e) => {
+            e.stopPropagation();
+            navigation.navigate('Item Detail', { item: containers[item.locationEntityUUID] });
+          }}
+        >
           <Ionicons name="folder-open" size={14} color={colors.primary} />
-          <Text style={styles.containerText}>In: {containers[item.locationEntityUUID]}</Text>
-        </View>
+          <Text style={styles.containerText}>In: {containers[item.locationEntityUUID].name}</Text>
+          <Ionicons name="chevron-forward" size={14} color={colors.primary} />
+        </TouchableOpacity>
       )}
       <Text style={styles.subtitle}>Created: {new Date(item.creation_time).toLocaleDateString()}</Text>
       {item.images && item.images.length > 0 && (
