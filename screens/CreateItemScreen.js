@@ -27,6 +27,7 @@ export default function CreateItemScreen({ route, navigation }) {
   const [quantity, setQuantity] = useState(item.quantity?.toString() || '1');
   const [nestable, setNestable] = useState(item.nestable || false);
   const [images, setImages] = useState([]);
+  const [imagesToDelete, setImagesToDelete] = useState([]); // Track images to delete on update
   const [selectedContainer, setSelectedContainer] = useState(null);
   const [containerSearchQuery, setContainerSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
@@ -42,6 +43,8 @@ export default function CreateItemScreen({ route, navigation }) {
     if (route.params?.item?.uuid) {
       setItemUuid(route.params.item.uuid);
       fetchItemDetails();
+      // Clear any pending deletions when loading a new item
+      setImagesToDelete([]);
     }
   }, [route.params?.item?.uuid]);
 
@@ -154,15 +157,11 @@ export default function CreateItemScreen({ route, navigation }) {
     setConfirmDialogVisible(false);
 
     if (isServerImage) {
-      // Delete from server
-      try {
-        await axios.delete(`${API_URL}/items/${itemUuid}/image/${imageObj.uuid}`);
-        showToast('Photo deleted successfully', 'success');
-        // Remove from local state
-        setImages(images.filter((_, i) => i !== index));
-      } catch (error) {
-        showToast('Failed to delete photo: ' + error.message, 'error');
-      }
+      // Mark for deletion (will be deleted when user clicks "Update Item")
+      setImagesToDelete([...imagesToDelete, imageObj.uuid]);
+      // Remove from local state immediately for UI feedback
+      setImages(images.filter((_, i) => i !== index));
+      showToast('Photo will be removed when you update the item', 'success');
     } else {
       // Just remove from local state (not yet uploaded)
       setImages(images.filter((_, i) => i !== index));
@@ -245,6 +244,19 @@ export default function CreateItemScreen({ route, navigation }) {
         }
       }
       
+      // Delete marked images from server
+      if (imagesToDelete.length > 0) {
+        try {
+          for (const imageUuid of imagesToDelete) {
+            await axios.delete(`${API_URL}/items/${itemUuid}/image/${imageUuid}`);
+          }
+          // Clear the deletion list after successful deletion
+          setImagesToDelete([]);
+        } catch (error) {
+          showToast('Item updated but failed to delete some photos: ' + error.message, 'error');
+        }
+      }
+      
       // Check if there are new local images to upload
       const hasNewImages = images.some(img => typeof img === 'string');
       
@@ -261,6 +273,8 @@ export default function CreateItemScreen({ route, navigation }) {
         }
       } else {
         showToast('Item updated successfully!', 'success');
+        // Refetch to ensure UI is in sync
+        await fetchItemDetails();
       }
     } catch (error) {
       showToast('Failed to update item: ' + error.message, 'error');
