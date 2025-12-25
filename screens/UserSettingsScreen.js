@@ -6,11 +6,11 @@ import {
   TouchableOpacity,
   StyleSheet,
   ScrollView,
-  Alert,
   ActivityIndicator
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../contexts/AuthContext';
+import { showAlert } from '../utils/alert';
 import colors from '../constants/colors';
 
 export default function UserSettingsScreen({ navigation }) {
@@ -46,7 +46,7 @@ export default function UserSettingsScreen({ navigation }) {
       
       await updateUser(updates);
       
-      Alert.alert('Success', 'Profile updated successfully!');
+      showAlert('Success', 'Profile updated successfully!');
       
       setNewPassword('');
       setConfirmPassword('');
@@ -69,7 +69,7 @@ export default function UserSettingsScreen({ navigation }) {
     try {
       await createEntity(newEntityName);
       
-      Alert.alert('Success', 'Entity created successfully!');
+      showAlert('Success', 'Entity created successfully!');
       
       setNewEntityName('');
     } catch (err) {
@@ -85,7 +85,7 @@ export default function UserSettingsScreen({ navigation }) {
       // Navigation will happen automatically when user state changes
     };
     
-    Alert.alert(
+    showAlert(
       'Logout',
       'Are you sure you want to logout?',
       [
