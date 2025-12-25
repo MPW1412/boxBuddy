@@ -1,7 +1,6 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import axios from 'axios';
 import { Platform } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const API_URL = Platform.OS === 'web' 
   ? (typeof window !== 'undefined' && window.location.origin.includes('boxbuddy.walther.haus') 
