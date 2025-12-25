@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image, ScrollView, Platform, Modal, Dimensions } from 'react-native';
 import axios from 'axios';
 import colors from '../constants/colors';
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import Toast from '../components/Toast';
 import ConfirmDialog from '../components/ConfirmDialog';
 
@@ -36,6 +37,15 @@ export default function ItemDetailScreen({ route, navigation }) {
     }
   }, [uuid]);
 
+  // Refresh when screen comes into focus (e.g., after editing the item)
+  useFocusEffect(
+    useCallback(() => {
+      if (uuid) {
+        fetchDetailedItem();
+      }
+    }, [uuid])
+  );
+
   const fetchDetailedItem = async () => {
     if (!uuid) return;
     
@@ -49,6 +59,10 @@ export default function ItemDetailScreen({ route, navigation }) {
         const containerResponse = await axios.get(`${API_URL}/items/${response.data.locationEntityUUID}`);
         setContainerName(containerResponse.data.name);
         setContainerItem(containerResponse.data);
+      } else {
+        // Clear container info if item is no longer in a container
+        setContainerName(null);
+        setContainerItem(null);
       }
 
       // If item is nestable, fetch contained items
