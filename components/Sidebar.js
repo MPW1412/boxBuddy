@@ -296,7 +296,7 @@ const styles = StyleSheet.create({
     height: '100%',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 2,
+    padding: 0,
   },
   containerText: {
     fontSize: 8,
