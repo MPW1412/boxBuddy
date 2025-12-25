@@ -102,10 +102,12 @@ export default function ListItemsScreen({ navigation, onPinContainer }) {
 
   const handleDragStart = (e, item) => {
     if (Platform.OS === 'web') {
+      console.log('Drag start - item:', item.name, 'nestable:', item.nestable);
       e.dataTransfer.setData('itemUuid', item.uuid);
       e.dataTransfer.setData('isContainer', item.nestable ? 'true' : 'false');
       if (item.nestable) {
         e.dataTransfer.setData('containerData', JSON.stringify(item));
+        console.log('Set containerData for:', item.name);
       }
       e.dataTransfer.effectAllowed = 'move';
     }

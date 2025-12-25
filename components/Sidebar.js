@@ -51,12 +51,20 @@ export default function Sidebar({ navigation, pinnedContainers = [], onRemovePin
 
   const handlePinZoneDrop = (e) => {
     e.preventDefault();
+    e.stopPropagation();
     setDragOverPinZone(false);
+    
+    console.log('Pin zone drop - types:', e.dataTransfer.types);
     
     try {
       const isContainer = e.dataTransfer.getData('isContainer') === 'true';
+      const itemUuid = e.dataTransfer.getData('itemUuid');
+      
+      console.log('Drop data - isContainer:', isContainer, 'itemUuid:', itemUuid);
+      
       if (isContainer) {
         const containerData = JSON.parse(e.dataTransfer.getData('containerData'));
+        console.log('Pinning container:', containerData);
         if (onPinContainer) {
           onPinContainer(containerData);
         }
@@ -68,10 +76,14 @@ export default function Sidebar({ navigation, pinnedContainers = [], onRemovePin
 
   const handlePinZoneDragOver = (e) => {
     e.preventDefault();
-    const isContainer = e.dataTransfer.types.includes('iscontainer');
-    if (isContainer) {
-      setDragOverPinZone(true);
-    }
+    e.stopPropagation();
+    
+    // Check if any data types are present
+    const types = Array.from(e.dataTransfer.types);
+    console.log('Drag over pin zone - types:', types);
+    
+    // Always show the drop zone when dragging over
+    setDragOverPinZone(true);
   };
 
   const handlePinZoneDragLeave = () => {
@@ -174,7 +186,10 @@ export default function Sidebar({ navigation, pinnedContainers = [], onRemovePin
           style={{
             marginTop: 6,
             marginBottom: 6,
-            minHeight: dragOverPinZone ? 80 : 0,
+            minHeight: 80,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
             transition: 'all 0.3s ease',
           }}
         >
@@ -184,9 +199,7 @@ export default function Sidebar({ navigation, pinnedContainers = [], onRemovePin
                 width: 74,
                 height: 74,
                 borderRadius: 8,
-                borderWidth: 2,
-                borderStyle: 'dashed',
-                borderColor: '#0092cc',
+                border: '2px dashed #0092cc',
                 backgroundColor: 'rgba(0, 146, 204, 0.1)',
                 display: 'flex',
                 alignItems: 'center',
@@ -194,9 +207,9 @@ export default function Sidebar({ navigation, pinnedContainers = [], onRemovePin
                 transition: 'all 0.2s ease',
               }}
             >
-              <Text style={{ fontSize: 10, color: '#0092cc', textAlign: 'center', fontWeight: 'bold' }}>
+              <span style={{ fontSize: 10, color: '#0092cc', textAlign: 'center', fontWeight: 'bold' }}>
                 Drop to pin
-              </Text>
+              </span>
             </div>
           )}
         </div>
