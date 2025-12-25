@@ -149,6 +149,10 @@ export default function Sidebar({ navigation, pinnedContainers = [], onRemovePin
             position: 'relative',
             marginTop: 3,
             marginBottom: 3,
+            padding: 10,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
             borderRadius: 8,
             border: isDropTarget ? '2px solid #14d91d' : '2px solid transparent',
             backgroundColor: isDropTarget ? 'rgba(20, 217, 29, 0.1)' : 'transparent',
@@ -192,7 +196,11 @@ export default function Sidebar({ navigation, pinnedContainers = [], onRemovePin
             position: 'relative',
             marginTop: 3,
             marginBottom: 3,
-            minHeight: 74,
+            padding: 10,
+            minHeight: 60,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
             transition: 'min-height 0.2s ease',
           }}
         >
@@ -200,10 +208,10 @@ export default function Sidebar({ navigation, pinnedContainers = [], onRemovePin
             <div
               style={{
                 position: 'absolute',
-                top: 0,
-                left: 0,
-                width: 74,
-                height: 74,
+                top: 10,
+                left: 10,
+                width: 40,
+                height: 40,
                 borderRadius: 8,
                 border: '2px dashed #0092cc',
                 backgroundColor: 'rgba(0, 146, 204, 0.1)',
@@ -214,7 +222,7 @@ export default function Sidebar({ navigation, pinnedContainers = [], onRemovePin
                 pointerEvents: 'none',
               }}
             >
-              <span style={{ fontSize: 10, color: '#0092cc', textAlign: 'center', fontWeight: 'bold', pointerEvents: 'none' }}>
+              <span style={{ fontSize: 8, color: '#0092cc', textAlign: 'center', fontWeight: 'bold', pointerEvents: 'none' }}>
                 Drop to pin
               </span>
             </div>
@@ -261,6 +269,9 @@ const styles = StyleSheet.create({
   containerItem: {
     position: 'relative',
     marginVertical: 3,
+    padding: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
     borderRadius: 8,
     borderWidth: 2,
     borderColor: 'transparent',
@@ -270,8 +281,8 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(20, 217, 29, 0.1)',
   },
   containerButton: {
-    width: 74,
-    height: 74,
+    width: 40,
+    height: 40,
     borderRadius: 8,
     overflow: 'hidden',
     backgroundColor: '#f0f0f0',
@@ -285,10 +296,10 @@ const styles = StyleSheet.create({
     height: '100%',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 4,
+    padding: 2,
   },
   containerText: {
-    fontSize: 10,
+    fontSize: 8,
     fontWeight: 'bold',
     color: colors.text,
     textAlign: 'center',
