@@ -179,11 +179,8 @@ export default function Sidebar({ navigation, pinnedContainers = [], onRemovePin
         <Ionicons name="trash-outline" size={40} color={colors.card} />
       </TouchableOpacity>
       
-      {/* Pinned Containers */}
-      {pinnedContainers.map(renderContainerButton)}
-      
-      {/* Pin Zone - Drop containers here to pin them (appears after pinned containers) */}
-      {Platform.OS === 'web' && (
+      {/* Pin Zone - Drop containers here to pin them (between bin and first container) */}
+      {Platform.OS === 'web' && pinnedContainers.length === 0 && (
         <div
           onDrop={handlePinZoneDrop}
           onDragOver={handlePinZoneDragOver}
@@ -221,6 +218,9 @@ export default function Sidebar({ navigation, pinnedContainers = [], onRemovePin
           )}
         </div>
       )}
+      
+      {/* Pinned Containers */}
+      {pinnedContainers.map(renderContainerButton)}
     </View>
   );
 }
