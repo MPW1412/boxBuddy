@@ -148,6 +148,7 @@ export default function Sidebar({ navigation, pinnedContainers = [], onRemovePin
           style={{
             position: 'relative',
             margin: 0,
+            marginLeft: -3,
             padding: 0,
             borderRadius: 8,
             border: isDropTarget ? '2px solid #14d91d' : '2px solid transparent',
@@ -230,7 +231,8 @@ const styles = StyleSheet.create({
     width: 80,
     backgroundColor: colors.card,
     paddingTop: 10,
-    paddingHorizontal: 3,
+    paddingLeft: 3,
+    paddingRight: 3,
     borderRightWidth: 1,
     borderRightColor: colors.border,
   },
@@ -261,6 +263,7 @@ const styles = StyleSheet.create({
   containerItem: {
     position: 'relative',
     margin: 0,
+    marginLeft: -3,
     padding: 0,
     borderRadius: 8,
     borderWidth: 2,
