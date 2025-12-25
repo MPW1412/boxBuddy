@@ -36,6 +36,17 @@ const linking = {
 export default function App() {
   const navigationRef = useRef();
   const [navigation, setNavigation] = useState(null);
+  const [pinnedContainers, setPinnedContainers] = useState([]);
+
+  const addPinnedContainer = (container) => {
+    if (!pinnedContainers.find(c => c.uuid === container.uuid)) {
+      setPinnedContainers([...pinnedContainers, container]);
+    }
+  };
+
+  const removePinnedContainer = (uuid) => {
+    setPinnedContainers(pinnedContainers.filter(c => c.uuid !== uuid));
+  };
 
   return (
     <NavigationContainer 
@@ -43,12 +54,18 @@ export default function App() {
       linking={linking}
     >
       <View style={{ flex: 1, flexDirection: 'row' }}>
-        <Sidebar navigation={navigation} />
+        <Sidebar 
+          navigation={navigation} 
+          pinnedContainers={pinnedContainers}
+          onRemovePinned={removePinnedContainer}
+        />
         <View style={{ flex: 1 }}>
           <Stack.Navigator initialRouteName="List Items" screenOptions={{ headerShown: false }}>
             <Stack.Screen name="Create Item" component={CreateItemScreen} />
             <Stack.Screen name="Edit Item" component={CreateItemScreen} />
-            <Stack.Screen name="List Items" component={ListItemsScreen} />
+            <Stack.Screen name="List Items">
+              {(props) => <ListItemsScreen {...props} onPinContainer={addPinnedContainer} />}
+            </Stack.Screen>
             <Stack.Screen name="Item Detail" component={ItemDetailScreen} />
             <Stack.Screen name="Bin" component={BinScreen} />
           </Stack.Navigator>

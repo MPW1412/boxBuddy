@@ -1,21 +1,118 @@
-import React from 'react';
-import { View, TouchableOpacity, Text, StyleSheet } from 'react-native';
+import React, { useState } from 'react';
+import { View, TouchableOpacity, Text, StyleSheet, Image, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import colors from '../constants/colors';
+import axios from 'axios';
 
-export default function Sidebar({ navigation }) {
+const API_URL = Platform.OS === 'web' 
+  ? (typeof window !== 'undefined' && window.location.origin.includes('boxbuddy.walther.haus') 
+      ? 'https://boxbuddy.walther.haus/api' 
+      : 'http://localhost:5000')
+  : 'http://localhost:5000';
+
+// Helper function to break text into syllables (simple version)
+const breakIntoLines = (text, maxCharsPerLine = 6) => {
+  const words = text.split(' ');
+  const lines = [];
+  let currentLine = '';
+  
+  for (const word of words) {
+    if ((currentLine + word).length <= maxCharsPerLine) {
+      currentLine += (currentLine ? ' ' : '') + word;
+    } else {
+      if (currentLine) lines.push(currentLine);
+      currentLine = word;
+    }
+  }
+  if (currentLine) lines.push(currentLine);
+  
+  return lines.slice(0, 3); // Max 3 lines
+};
+
+export default function Sidebar({ navigation, pinnedContainers = [], onRemovePinned }) {
+  const [dragOverContainer, setDragOverContainer] = useState(null);
+
+  const handleDrop = async (e, containerUuid) => {
+    e.preventDefault();
+    setDragOverContainer(null);
+    
+    try {
+      const itemUuid = e.dataTransfer.getData('itemUuid');
+      if (itemUuid && containerUuid) {
+        // Store item in container
+        await axios.post(`${API_URL}/items/${itemUuid}/store/${containerUuid}`);
+        console.log(`Item ${itemUuid} added to container ${containerUuid}`);
+      }
+    } catch (error) {
+      console.error('Error adding item to container:', error);
+    }
+  };
+
+  const handleDragOver = (e, containerUuid) => {
+    e.preventDefault();
+    setDragOverContainer(containerUuid);
+  };
+
+  const handleDragLeave = () => {
+    setDragOverContainer(null);
+  };
+
+  const renderContainerButton = (container) => {
+    const hasImage = container.images && container.images.length > 0;
+    const isDropTarget = dragOverContainer === container.uuid;
+    
+    return (
+      <View
+        key={container.uuid}
+        style={[styles.containerItem, isDropTarget && styles.containerItemDragOver]}
+        onDrop={(e) => handleDrop(e, container.uuid)}
+        onDragOver={(e) => handleDragOver(e, container.uuid)}
+        onDragLeave={handleDragLeave}
+      >
+        <TouchableOpacity 
+          style={styles.containerButton}
+          onPress={() => navigation && navigation.navigate('Item Detail', { uuid: container.uuid })}
+          onLongPress={() => onRemovePinned && onRemovePinned(container.uuid)}
+        >
+          {hasImage ? (
+            <Image
+              source={{ uri: `${API_URL}/images/${container.images[0].uuid}` }}
+              style={styles.containerImage}
+              resizeMode="cover"
+            />
+          ) : (
+            <View style={styles.containerTextContainer}>
+              {breakIntoLines(container.name).map((line, index) => (
+                <Text key={index} style={styles.containerText}>{line}</Text>
+              ))}
+            </View>
+          )}
+        </TouchableOpacity>
+        <TouchableOpacity 
+          style={styles.unpinButton}
+          onPress={() => onRemovePinned && onRemovePinned(container.uuid)}
+        >
+          <Ionicons name="close-circle" size={16} color={colors.error} />
+        </TouchableOpacity>
+      </View>
+    );
+  };
+
   return (
     <View style={styles.sidebar}>
       <TouchableOpacity style={styles.createItem} onPress={() => navigation && navigation.navigate('Create Item')}>
         <Ionicons name="add-circle" size={40} color={colors.card} />
       </TouchableOpacity>
-       <TouchableOpacity style={styles.listItem} onPress={() => navigation && navigation.navigate('List Items')}>
-         <Ionicons name="list" size={40} color={colors.card} />
-       </TouchableOpacity>
-       <TouchableOpacity style={styles.binItem} onPress={() => navigation && navigation.navigate('Bin')}>
-         <Ionicons name="trash-outline" size={40} color={colors.card} />
-       </TouchableOpacity>
-     </View>
+      <TouchableOpacity style={styles.listItem} onPress={() => navigation && navigation.navigate('List Items')}>
+        <Ionicons name="list" size={40} color={colors.card} />
+      </TouchableOpacity>
+      <TouchableOpacity style={styles.binItem} onPress={() => navigation && navigation.navigate('Bin')}>
+        <Ionicons name="trash-outline" size={40} color={colors.card} />
+      </TouchableOpacity>
+      
+      {/* Pinned Containers */}
+      {pinnedContainers.map(renderContainerButton)}
+    </View>
   );
 }
 
@@ -51,6 +148,52 @@ const styles = StyleSheet.create({
     marginVertical: 3,
     backgroundColor: '#666666',
     borderRadius: 8,
+  },
+  containerItem: {
+    position: 'relative',
+    marginVertical: 3,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  containerItemDragOver: {
+    borderColor: colors.primary,
+    backgroundColor: 'rgba(20, 217, 29, 0.1)',
+  },
+  containerButton: {
+    width: 74,
+    height: 74,
+    borderRadius: 8,
+    overflow: 'hidden',
+    backgroundColor: '#f0f0f0',
+  },
+  containerImage: {
+    width: '100%',
+    height: '100%',
+  },
+  containerTextContainer: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 4,
+  },
+  containerText: {
+    fontSize: 10,
+    fontWeight: 'bold',
+    color: colors.text,
+    textAlign: 'center',
+  },
+  unpinButton: {
+    position: 'absolute',
+    top: -6,
+    right: -6,
+    backgroundColor: colors.card,
+    borderRadius: 10,
+    width: 20,
+    height: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   text: {
     marginLeft: 10,

@@ -11,7 +11,7 @@ const API_URL = Platform.OS === 'web'
       : 'http://localhost:5000')
   : 'http://localhost:5000';
 
-export default function ListItemsScreen({ navigation }) {
+export default function ListItemsScreen({ navigation, onPinContainer }) {
   const [items, setItems] = useState([]);
   const [containers, setContainers] = useState({});
   const [searchQuery, setSearchQuery] = useState('');
@@ -100,17 +100,44 @@ export default function ListItemsScreen({ navigation }) {
     fetchItems(true);
   };
 
+  const handleDragStart = (e, item) => {
+    if (Platform.OS === 'web') {
+      e.dataTransfer.setData('itemUuid', item.uuid);
+      e.dataTransfer.effectAllowed = 'move';
+    }
+  };
+
+  const handlePinContainer = (e, item) => {
+    e.stopPropagation();
+    if (item.nestable && onPinContainer) {
+      onPinContainer(item);
+    }
+  };
+
   const renderItem = ({ item }) => (
-    <TouchableOpacity style={styles.card} onPress={() => navigation.navigate('Item Detail', { uuid: item.uuid })}>
-      <View style={styles.titleRow}>
-        <Text style={styles.title}>{item.name}</Text>
-        {item.nestable && (
-          <View style={styles.nestableBadge}>
-            <Ionicons name="archive" size={16} color={colors.primary} />
-            <Text style={styles.nestableText}>Container</Text>
-          </View>
-        )}
-      </View>
+    <View
+      draggable={Platform.OS === 'web'}
+      onDragStart={(e) => handleDragStart(e, item)}
+      style={styles.cardWrapper}
+    >
+      <TouchableOpacity style={styles.card} onPress={() => navigation.navigate('Item Detail', { uuid: item.uuid })}>
+        <View style={styles.titleRow}>
+          <Text style={styles.title}>{item.name}</Text>
+          {item.nestable && (
+            <View style={styles.titleRowActions}>
+              <View style={styles.nestableBadge}>
+                <Ionicons name="archive" size={16} color={colors.primary} />
+                <Text style={styles.nestableText}>Container</Text>
+              </View>
+              <TouchableOpacity 
+                style={styles.pinButton}
+                onPress={(e) => handlePinContainer(e, item)}
+              >
+                <Ionicons name="push-outline" size={20} color={colors.primary} />
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
       <Text style={styles.subtitle}>Type: {item.type}</Text>
       <Text style={styles.subtitle}>Visibility: {item.visibility}</Text>
       {item.locationEntityUUID && containers[item.locationEntityUUID] && (
@@ -134,7 +161,8 @@ export default function ListItemsScreen({ navigation }) {
           ))}
         </ScrollView>
       )}
-    </TouchableOpacity>
+      </TouchableOpacity>
+    </View>
   );
 
   const renderFooter = () => {
@@ -320,5 +348,16 @@ const styles = StyleSheet.create({
     color: colors.text,
     opacity: 0.4,
     marginTop: 8,
+  },
+  cardWrapper: {
+    cursor: 'grab',
+  },
+  titleRowActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  pinButton: {
+    padding: 4,
   },
 });
