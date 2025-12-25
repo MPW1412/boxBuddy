@@ -11,6 +11,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../contexts/AuthContext';
 import { showAlert } from '../utils/alert';
+import ConfirmDialog from '../components/ConfirmDialog';
 import colors from '../constants/colors';
 
 export default function UserSettingsScreen({ navigation }) {
@@ -23,6 +24,7 @@ export default function UserSettingsScreen({ navigation }) {
   const [newEntityName, setNewEntityName] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   const handleUpdateProfile = async () => {
     setError('');
@@ -79,20 +81,14 @@ export default function UserSettingsScreen({ navigation }) {
     }
   };
 
-  const handleLogout = async () => {
-    const confirmLogout = () => {
-      logout();
-      // Navigation will happen automatically when user state changes
-    };
-    
-    showAlert(
-      'Logout',
-      'Are you sure you want to logout?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Logout', onPress: confirmLogout, style: 'destructive' }
-      ]
-    );
+  const handleLogout = () => {
+    setShowLogoutConfirm(true);
+  };
+
+  const confirmLogout = () => {
+    setShowLogoutConfirm(false);
+    logout();
+    // Navigation will happen automatically when user state changes
   };
 
   return (
@@ -210,6 +206,15 @@ export default function UserSettingsScreen({ navigation }) {
           <Text style={[styles.buttonText, { marginLeft: 8 }]}>Logout</Text>
         </TouchableOpacity>
       </View>
+
+      <ConfirmDialog
+        visible={showLogoutConfirm}
+        title="Logout"
+        message="Are you sure you want to logout?"
+        confirmText="Logout"
+        onConfirm={confirmLogout}
+        onCancel={() => setShowLogoutConfirm(false)}
+      />
     </ScrollView>
   );
 }
