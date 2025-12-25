@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Modal } from 'react-native';
 import colors from '../constants/colors';
 
-const ConfirmDialog = ({ visible, title, message, onConfirm, onCancel }) => {
+const ConfirmDialog = ({ visible, title, message, onConfirm, onCancel, confirmText = 'Delete' }) => {
   return (
     <Modal
       transparent={true}
@@ -25,7 +25,7 @@ const ConfirmDialog = ({ visible, title, message, onConfirm, onCancel }) => {
               style={[styles.button, styles.confirmButton]}
               onPress={onConfirm}
             >
-              <Text style={styles.confirmButtonText}>Delete</Text>
+              <Text style={styles.confirmButtonText}>{confirmText}</Text>
             </TouchableOpacity>
           </View>
         </View>

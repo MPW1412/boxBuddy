@@ -86,6 +86,14 @@ export default function CreateItemScreen({ route, navigation }) {
       navigation.goBack();
     }
   };
+  
+  const handleDiscardChanges = () => {
+    setConfirmDialogVisible(false);
+    setConfirmDialogData(null);
+    showToast('Changes discarded', 'success');
+    // Small delay to show toast before navigating away
+    setTimeout(() => navigation.goBack(), 500);
+  };
 
   const fetchItemDetails = async () => {
     try {
@@ -207,9 +215,7 @@ export default function CreateItemScreen({ route, navigation }) {
   const handleConfirmAction = async () => {
     if (confirmDialogData.action === 'discard') {
       // User confirmed discarding changes - go back without saving
-      setConfirmDialogVisible(false);
-      setConfirmDialogData(null);
-      navigation.goBack();
+      handleDiscardChanges();
       return;
     }
     
@@ -644,6 +650,7 @@ export default function CreateItemScreen({ route, navigation }) {
             ? 'You have unsaved changes. Are you sure you want to discard them and go back?'
             : (confirmDialogData?.message || '')
         }
+        confirmText={confirmDialogData?.action === 'discard' ? 'Discard' : 'Delete'}
         onConfirm={handleConfirmAction}
         onCancel={handleCancelDelete}
       />
@@ -653,7 +660,10 @@ export default function CreateItemScreen({ route, navigation }) {
             <Ionicons name="arrow-back" size={24} color={colors.primary} />
           </TouchableOpacity>
         )}
-        <Text style={styles.header}>{itemUuid ? 'Edit Item' : 'Create New Item'}</Text>
+        <Text style={styles.header}>
+          {itemUuid ? 'Edit Item' : 'Create New Item'}
+          {itemUuid && hasChanges() && <Text style={styles.unsavedIndicator}> *</Text>}
+        </Text>
       </View>
       <TextInput
         style={styles.input}
@@ -1046,5 +1056,9 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     color: colors.text,
     opacity: 0.6,
+  },
+  unsavedIndicator: {
+    color: colors.error,
+    fontSize: 24,
   },
 });
