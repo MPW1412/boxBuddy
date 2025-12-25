@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image, ScrollView, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image, ScrollView, Platform, Modal, Dimensions } from 'react-native';
 import axios from 'axios';
 import colors from '../constants/colors';
 import { Ionicons } from '@expo/vector-icons';
 import Toast from '../components/Toast';
 import ConfirmDialog from '../components/ConfirmDialog';
+
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 const API_URL = Platform.OS === 'web'
   ? (typeof window !== 'undefined' && window.location.origin.includes('boxbuddy.walther.haus')
@@ -21,6 +23,8 @@ export default function ItemDetailScreen({ route, navigation }) {
   const [toastVisible, setToastVisible] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
   const [toastType, setToastType] = useState('success');
+  const [imageViewerVisible, setImageViewerVisible] = useState(false);
+  const [selectedImageIndex, setSelectedImageIndex] = useState(0);
 
   useEffect(() => {
     fetchDetailedItem();
@@ -72,6 +76,27 @@ export default function ItemDetailScreen({ route, navigation }) {
     setToastMessage(message);
     setToastType(type);
     setToastVisible(true);
+  };
+
+  const openImageViewer = (index) => {
+    setSelectedImageIndex(index);
+    setImageViewerVisible(true);
+  };
+
+  const closeImageViewer = () => {
+    setImageViewerVisible(false);
+  };
+
+  const nextImage = () => {
+    if (detailedItem.images && selectedImageIndex < detailedItem.images.length - 1) {
+      setSelectedImageIndex(selectedImageIndex + 1);
+    }
+  };
+
+  const previousImage = () => {
+    if (selectedImageIndex > 0) {
+      setSelectedImageIndex(selectedImageIndex - 1);
+    }
   };
 
   const renderItem = ({ item: containedItem }) => (
@@ -165,16 +190,70 @@ export default function ItemDetailScreen({ route, navigation }) {
           <Text style={styles.sectionTitle}>Photos</Text>
           <ScrollView horizontal style={styles.photosScroll}>
             {detailedItem.images.map((img, index) => (
-              <Image
-                key={index}
-                source={{ uri: `${API_URL}/images/${img.uuid}` }}
-                style={styles.photo}
-                resizeMode="contain"
-              />
+              <TouchableOpacity key={index} onPress={() => openImageViewer(index)}>
+                <Image
+                  source={{ uri: `${API_URL}/images/${img.uuid}` }}
+                  style={styles.photo}
+                  resizeMode="contain"
+                />
+              </TouchableOpacity>
             ))}
           </ScrollView>
         </View>
       )}
+
+      {/* Image Viewer Modal */}
+      <Modal
+        visible={imageViewerVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={closeImageViewer}
+      >
+        <View style={styles.imageViewerContainer}>
+          <TouchableOpacity style={styles.imageViewerBackdrop} onPress={closeImageViewer} />
+          
+          <View style={styles.imageViewerContent}>
+            {/* Close Button */}
+            <TouchableOpacity style={styles.closeButton} onPress={closeImageViewer}>
+              <Ionicons name="close" size={32} color="white" />
+            </TouchableOpacity>
+
+            {/* Image */}
+            {detailedItem.images && detailedItem.images[selectedImageIndex] && (
+              <Image
+                source={{ uri: `${API_URL}/images/${detailedItem.images[selectedImageIndex].uuid}` }}
+                style={styles.fullscreenImage}
+                resizeMode="contain"
+              />
+            )}
+
+            {/* Navigation Arrows */}
+            {detailedItem.images && detailedItem.images.length > 1 && (
+              <>
+                {selectedImageIndex > 0 && (
+                  <TouchableOpacity style={styles.navButtonLeft} onPress={previousImage}>
+                    <Ionicons name="chevron-back" size={40} color="white" />
+                  </TouchableOpacity>
+                )}
+                {selectedImageIndex < detailedItem.images.length - 1 && (
+                  <TouchableOpacity style={styles.navButtonRight} onPress={nextImage}>
+                    <Ionicons name="chevron-forward" size={40} color="white" />
+                  </TouchableOpacity>
+                )}
+              </>
+            )}
+
+            {/* Image Counter */}
+            {detailedItem.images && detailedItem.images.length > 1 && (
+              <View style={styles.imageCounter}>
+                <Text style={styles.imageCounterText}>
+                  {selectedImageIndex + 1} / {detailedItem.images.length}
+                </Text>
+              </View>
+            )}
+          </View>
+        </View>
+      </Modal>
 
       {/* Contained Items (for nestable items) */}
       {detailedItem.nestable && (
@@ -417,5 +496,77 @@ const styles = StyleSheet.create({
     opacity: 0.6,
     textAlign: 'center',
     padding: 20,
+  },
+  imageViewerContainer: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.95)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  imageViewerBackdrop: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+  imageViewerContent: {
+    width: '90%',
+    height: '90%',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  fullscreenImage: {
+    width: '100%',
+    height: '100%',
+  },
+  closeButton: {
+    position: 'absolute',
+    top: 20,
+    right: 20,
+    zIndex: 10,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    borderRadius: 20,
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  navButtonLeft: {
+    position: 'absolute',
+    left: 20,
+    top: '50%',
+    marginTop: -20,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    borderRadius: 20,
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  navButtonRight: {
+    position: 'absolute',
+    right: 20,
+    top: '50%',
+    marginTop: -20,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    borderRadius: 20,
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  imageCounter: {
+    position: 'absolute',
+    bottom: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    paddingHorizontal: 15,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+  imageCounterText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
