@@ -101,7 +101,7 @@ export default function ListItemsScreen({ navigation }) {
   };
 
   const renderItem = ({ item }) => (
-    <TouchableOpacity style={styles.card} onPress={() => navigation.navigate('Item Detail', { item })}>
+    <TouchableOpacity style={styles.card} onPress={() => navigation.navigate('Item Detail', { uuid: item.uuid })}>
       <View style={styles.titleRow}>
         <Text style={styles.title}>{item.name}</Text>
         {item.nestable && (
@@ -118,7 +118,7 @@ export default function ListItemsScreen({ navigation }) {
           style={styles.containerInfo}
           onPress={(e) => {
             e.stopPropagation();
-            navigation.navigate('Item Detail', { item: containers[item.locationEntityUUID] });
+            navigation.navigate('Item Detail', { uuid: containers[item.locationEntityUUID].uuid });
           }}
         >
           <Ionicons name="folder-open" size={14} color={colors.primary} />

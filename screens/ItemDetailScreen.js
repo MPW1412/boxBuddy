@@ -15,8 +15,11 @@ const API_URL = Platform.OS === 'web'
   : 'http://localhost:5000';
 
 export default function ItemDetailScreen({ route, navigation }) {
-  const { item } = route.params;
-  const [detailedItem, setDetailedItem] = useState(item);
+  // Support both URL routing (uuid param) and legacy navigation (item object)
+  const uuid = route.params?.uuid || route.params?.item?.uuid;
+  const initialItem = route.params?.item || null;
+  
+  const [detailedItem, setDetailedItem] = useState(initialItem);
   const [containedItems, setContainedItems] = useState([]);
   const [containerName, setContainerName] = useState(null);
   const [containerItem, setContainerItem] = useState(null);
@@ -28,13 +31,17 @@ export default function ItemDetailScreen({ route, navigation }) {
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
 
   useEffect(() => {
-    fetchDetailedItem();
-  }, []);
+    if (uuid) {
+      fetchDetailedItem();
+    }
+  }, [uuid]);
 
   const fetchDetailedItem = async () => {
+    if (!uuid) return;
+    
     try {
       // Fetch full item details
-      const response = await axios.get(`${API_URL}/items/${item.uuid}`);
+      const response = await axios.get(`${API_URL}/items/${uuid}`);
       setDetailedItem(response.data);
 
       // If item is nested, fetch container details
@@ -54,9 +61,11 @@ export default function ItemDetailScreen({ route, navigation }) {
   };
 
   const fetchContainedItems = async () => {
+    if (!uuid) return;
+    
     try {
       const response = await axios.get(`${API_URL}/items`);
-      const contained = response.data.filter(i => i.locationEntityUUID === item.uuid);
+      const contained = response.data.filter(i => i.locationEntityUUID === uuid);
       setContainedItems(contained);
     } catch (error) {
       console.error('Error fetching contained items:', error);
@@ -104,7 +113,7 @@ export default function ItemDetailScreen({ route, navigation }) {
   const renderItem = ({ item: containedItem }) => (
     <TouchableOpacity
       style={styles.containedItemCard}
-      onPress={() => navigation.navigate('Item Detail', { item: containedItem })}
+      onPress={() => navigation.navigate('Item Detail', { uuid: containedItem.uuid })}
     >
       <View style={styles.containedItemHeader}>
         <Text style={styles.containedItemName}>{containedItem.name}</Text>
@@ -135,7 +144,7 @@ export default function ItemDetailScreen({ route, navigation }) {
         <View style={styles.headerButtons}>
           <TouchableOpacity
             style={styles.editButton}
-            onPress={() => navigation.navigate('Create Item', { item: detailedItem })}
+            onPress={() => navigation.navigate('Edit Item', { uuid: detailedItem.uuid })}
           >
             <Ionicons name="pencil" size={20} color="white" />
           </TouchableOpacity>
@@ -160,7 +169,7 @@ export default function ItemDetailScreen({ route, navigation }) {
         {containerName && containerItem && (
           <TouchableOpacity 
             style={styles.containerInfo}
-            onPress={() => navigation.push('Item Detail', { item: containerItem })}
+            onPress={() => navigation.push('Item Detail', { uuid: containerItem.uuid })}
           >
             <Ionicons name="folder-open" size={16} color={colors.primary} />
             <Text style={styles.containerText}>Stored in: {containerName}</Text>
@@ -290,7 +299,7 @@ export default function ItemDetailScreen({ route, navigation }) {
               <TouchableOpacity
                 key={containedItem.uuid}
                 style={styles.containedItemCard}
-                onPress={() => navigation.navigate('Item Detail', { item: containedItem })}
+                onPress={() => navigation.navigate('Item Detail', { uuid: containedItem.uuid })}
               >
                 <View style={styles.containedItemHeader}>
                   <Text style={styles.containedItemName}>{containedItem.name}</Text>

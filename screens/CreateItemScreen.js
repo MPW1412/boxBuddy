@@ -19,13 +19,16 @@ const API_URL = Platform.OS === 'web'
 const { height } = Dimensions.get('window');
 
 export default function CreateItemScreen({ route, navigation }) {
+  // Get UUID from route params (for URL routing)
+  const uuidFromRoute = route.params?.uuid;
   const item = route.params?.item || {};
-  const [name, setName] = useState(item.name || '');
-  const [type, setType] = useState(item.type || 'ITEM');
-  const [visibility, setVisibility] = useState(item.visibility || 'PRIVATE');
-  const [description, setDescription] = useState(item.description || '');
-  const [quantity, setQuantity] = useState(item.quantity?.toString() || '1');
-  const [nestable, setNestable] = useState(item.nestable || false);
+  
+  const [name, setName] = useState('');
+  const [type, setType] = useState('ITEM');
+  const [visibility, setVisibility] = useState('PRIVATE');
+  const [description, setDescription] = useState('');
+  const [quantity, setQuantity] = useState('1');
+  const [nestable, setNestable] = useState(false);
   const [images, setImages] = useState([]);
   const [imagesToDelete, setImagesToDelete] = useState([]); // Track images to delete on update
   const [selectedContainer, setSelectedContainer] = useState(null);
@@ -35,30 +38,31 @@ export default function CreateItemScreen({ route, navigation }) {
   
   // Track original values to detect changes
   const [originalData, setOriginalData] = useState({
-    name: item.name || '',
-    type: item.type || 'ITEM',
-    visibility: item.visibility || 'PRIVATE',
-    description: item.description || '',
-    quantity: item.quantity?.toString() || '1',
-    nestable: item.nestable || false,
+    name: '',
+    type: 'ITEM',
+    visibility: 'PRIVATE',
+    description: '',
+    quantity: '1',
+    nestable: false,
     imageCount: 0,
     containerUuid: null
   });
   const [cameraOpen, setCameraOpen] = useState(false);
   const videoRef = useRef(null);
-  const [itemUuid, setItemUuid] = useState(item.uuid || null);
+  const [itemUuid, setItemUuid] = useState(uuidFromRoute || null);
   const [cropModalVisible, setCropModalVisible] = useState(false);
 
   useEffect(() => {
-    // Only fetch item details when editing an existing item (coming from route params)
-    // Don't fetch after creating a new item (when itemUuid is set programmatically)
-    if (route.params?.item?.uuid) {
-      setItemUuid(route.params.item.uuid);
-      fetchItemDetails();
+    // Fetch item details when editing an existing item
+    // UUID can come from route params (URL routing) or from legacy item object
+    const uuid = route.params?.uuid || route.params?.item?.uuid;
+    if (uuid) {
+      setItemUuid(uuid);
+      fetchItemDetails(uuid);
       // Clear any pending deletions when loading a new item
       setImagesToDelete([]);
     }
-  }, [route.params?.item?.uuid]);
+  }, [route.params?.uuid, route.params?.item?.uuid]);
 
   const hasChanges = () => {
     if (!itemUuid) return false; // No changes tracking for new items
@@ -95,9 +99,12 @@ export default function CreateItemScreen({ route, navigation }) {
     setTimeout(() => navigation.goBack(), 500);
   };
 
-  const fetchItemDetails = async () => {
+  const fetchItemDetails = async (uuid) => {
+    const targetUuid = uuid || itemUuid;
+    if (!targetUuid) return;
+    
     try {
-      const response = await axios.get(`${API_URL}/items/${itemUuid}`);
+      const response = await axios.get(`${API_URL}/items/${targetUuid}`);
       // Parse enum values to strip class prefix (e.g., "Type.ITEM" -> "ITEM")
       const parseEnum = (value, defaultVal) => {
         if (!value) return defaultVal;
