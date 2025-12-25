@@ -58,6 +58,7 @@ export default function App() {
           navigation={navigation} 
           pinnedContainers={pinnedContainers}
           onRemovePinned={removePinnedContainer}
+          onPinContainer={addPinnedContainer}
         />
         <View style={{ flex: 1 }}>
           <Stack.Navigator initialRouteName="List Items" screenOptions={{ headerShown: false }}>

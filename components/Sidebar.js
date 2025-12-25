@@ -29,8 +29,9 @@ const breakIntoLines = (text, maxCharsPerLine = 6) => {
   return lines.slice(0, 3); // Max 3 lines
 };
 
-export default function Sidebar({ navigation, pinnedContainers = [], onRemovePinned }) {
+export default function Sidebar({ navigation, pinnedContainers = [], onRemovePinned, onPinContainer }) {
   const [dragOverContainer, setDragOverContainer] = useState(null);
+  const [dragOverPinZone, setDragOverPinZone] = useState(false);
 
   const handleDrop = async (e, containerUuid) => {
     e.preventDefault();
@@ -46,6 +47,35 @@ export default function Sidebar({ navigation, pinnedContainers = [], onRemovePin
     } catch (error) {
       console.error('Error adding item to container:', error);
     }
+  };
+
+  const handlePinZoneDrop = (e) => {
+    e.preventDefault();
+    setDragOverPinZone(false);
+    
+    try {
+      const isContainer = e.dataTransfer.getData('isContainer') === 'true';
+      if (isContainer) {
+        const containerData = JSON.parse(e.dataTransfer.getData('containerData'));
+        if (onPinContainer) {
+          onPinContainer(containerData);
+        }
+      }
+    } catch (error) {
+      console.error('Error pinning container:', error);
+    }
+  };
+
+  const handlePinZoneDragOver = (e) => {
+    e.preventDefault();
+    const isContainer = e.dataTransfer.types.includes('iscontainer');
+    if (isContainer) {
+      setDragOverPinZone(true);
+    }
+  };
+
+  const handlePinZoneDragLeave = () => {
+    setDragOverPinZone(false);
   };
 
   const handleDragOver = (e, containerUuid) => {
@@ -134,6 +164,43 @@ export default function Sidebar({ navigation, pinnedContainers = [], onRemovePin
       <TouchableOpacity style={styles.binItem} onPress={() => navigation && navigation.navigate('Bin')}>
         <Ionicons name="trash-outline" size={40} color={colors.card} />
       </TouchableOpacity>
+      
+      {/* Pin Zone - Drop containers here to pin them */}
+      {Platform.OS === 'web' && (
+        <div
+          onDrop={handlePinZoneDrop}
+          onDragOver={handlePinZoneDragOver}
+          onDragLeave={handlePinZoneDragLeave}
+          style={{
+            marginTop: 6,
+            marginBottom: 6,
+            minHeight: dragOverPinZone ? 80 : 0,
+            transition: 'all 0.3s ease',
+          }}
+        >
+          {dragOverPinZone && (
+            <div
+              style={{
+                width: 74,
+                height: 74,
+                borderRadius: 8,
+                borderWidth: 2,
+                borderStyle: 'dashed',
+                borderColor: '#0092cc',
+                backgroundColor: 'rgba(0, 146, 204, 0.1)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                transition: 'all 0.2s ease',
+              }}
+            >
+              <Text style={{ fontSize: 10, color: '#0092cc', textAlign: 'center', fontWeight: 'bold' }}>
+                Drop to pin
+              </Text>
+            </div>
+          )}
+        </div>
+      )}
       
       {/* Pinned Containers */}
       {pinnedContainers.map(renderContainerButton)}
