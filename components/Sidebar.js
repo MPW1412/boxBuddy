@@ -149,6 +149,7 @@ export default function Sidebar({ navigation, pinnedContainers = [], onRemovePin
             position: 'relative',
             marginTop: 3,
             marginBottom: 3,
+            padding: 0,
             borderRadius: 8,
             border: isDropTarget ? '2px solid #14d91d' : '2px solid transparent',
             backgroundColor: isDropTarget ? 'rgba(20, 217, 29, 0.1)' : 'transparent',
