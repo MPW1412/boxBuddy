@@ -1,5 +1,5 @@
-import React, { useRef, useState } from 'react';
-import { View, ActivityIndicator } from 'react-native';
+import React, { useRef, useState, useEffect } from 'react';
+import { View, ActivityIndicator, Platform } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import CreateItemScreen from './screens/CreateItemScreen';
@@ -11,6 +11,13 @@ import UserSettingsScreen from './screens/UserSettingsScreen';
 import Sidebar from './components/Sidebar';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import colors from './constants/colors';
+import axios from 'axios';
+
+const API_URL = Platform.OS === 'web' 
+  ? (typeof window !== 'undefined' && window.location.origin.includes('boxbuddy.walther.haus') 
+      ? 'https://boxbuddy.walther.haus/api' 
+      : 'http://localhost:5000')
+  : 'http://localhost:5000';
 
 const Stack = createStackNavigator();
 
@@ -45,14 +52,48 @@ function AppNavigator() {
   const [pinnedContainers, setPinnedContainers] = useState([]);
   const { user, loading } = useAuth();
 
-  const addPinnedContainer = (container) => {
-    if (!pinnedContainers.find(c => c.uuid === container.uuid)) {
-      setPinnedContainers([...pinnedContainers, container]);
+  // Load pinned containers when user logs in
+  useEffect(() => {
+    if (user) {
+      loadPinnedContainers();
+    } else {
+      setPinnedContainers([]);
+    }
+  }, [user]);
+
+  const loadPinnedContainers = async () => {
+    try {
+      const response = await axios.get(`${API_URL}/auth/pinned-containers`);
+      // Extract containers from the response (which includes pin_order and container data)
+      const containers = response.data.map(pin => pin.container);
+      setPinnedContainers(containers);
+    } catch (error) {
+      console.error('Failed to load pinned containers:', error);
     }
   };
 
-  const removePinnedContainer = (uuid) => {
-    setPinnedContainers(pinnedContainers.filter(c => c.uuid !== uuid));
+  const addPinnedContainer = async (container) => {
+    if (pinnedContainers.find(c => c.uuid === container.uuid)) {
+      return; // Already pinned
+    }
+    
+    try {
+      await axios.post(`${API_URL}/auth/pinned-containers`, {
+        container_uuid: container.uuid
+      });
+      setPinnedContainers([...pinnedContainers, container]);
+    } catch (error) {
+      console.error('Failed to pin container:', error);
+    }
+  };
+
+  const removePinnedContainer = async (uuid) => {
+    try {
+      await axios.delete(`${API_URL}/auth/pinned-containers/${uuid}`);
+      setPinnedContainers(pinnedContainers.filter(c => c.uuid !== uuid));
+    } catch (error) {
+      console.error('Failed to unpin container:', error);
+    }
   };
 
   if (loading) {
