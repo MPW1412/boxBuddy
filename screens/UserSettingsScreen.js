@@ -10,12 +10,18 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../contexts/AuthContext';
-import { showAlert } from '../utils/alert';
 import ConfirmDialog from '../components/ConfirmDialog';
+import Toast from '../components/Toast';
 import colors from '../constants/colors';
 
 export default function UserSettingsScreen({ navigation }) {
   const { user, logout, updateUser, createEntity } = useAuth();
+  
+  const showToast = (message, type = 'success') => {
+    setToastMessage(message);
+    setToastType(type);
+    setToastVisible(true);
+  };
   
   const [email, setEmail] = useState(user?.email || '');
   const [newPassword, setNewPassword] = useState('');
@@ -25,6 +31,9 @@ export default function UserSettingsScreen({ navigation }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [toastVisible, setToastVisible] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
+  const [toastType, setToastType] = useState('success');
 
   const handleUpdateProfile = async () => {
     setError('');
@@ -48,7 +57,7 @@ export default function UserSettingsScreen({ navigation }) {
       
       await updateUser(updates);
       
-      showAlert('Success', 'Profile updated successfully!');
+      showToast('Profile updated successfully!', 'success');
       
       setNewPassword('');
       setConfirmPassword('');
@@ -71,7 +80,7 @@ export default function UserSettingsScreen({ navigation }) {
     try {
       await createEntity(newEntityName);
       
-      showAlert('Success', 'Entity created successfully!');
+      showToast('Entity created successfully!', 'success');
       
       setNewEntityName('');
     } catch (err) {
@@ -214,6 +223,13 @@ export default function UserSettingsScreen({ navigation }) {
         confirmText="Logout"
         onConfirm={confirmLogout}
         onCancel={() => setShowLogoutConfirm(false)}
+      />
+      
+      <Toast
+        message={toastMessage}
+        type={toastType}
+        visible={toastVisible}
+        onHide={() => setToastVisible(false)}
       />
     </ScrollView>
   );
