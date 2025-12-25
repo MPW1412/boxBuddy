@@ -14,10 +14,7 @@ const linking = {
   prefixes: ['https://boxbuddy.walther.haus', 'http://localhost:8081'],
   config: {
     screens: {
-      'List Items': {
-        path: 'items',
-        initialRouteName: true,
-      },
+      'List Items': 'items',
       'Create Item': 'create',
       'Edit Item': {
         path: 'item/:uuid/edit',
