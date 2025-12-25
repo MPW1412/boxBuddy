@@ -32,6 +32,18 @@ export default function CreateItemScreen({ route, navigation }) {
   const [containerSearchQuery, setContainerSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [showContainerSearch, setShowContainerSearch] = useState(false);
+  
+  // Track original values to detect changes
+  const [originalData, setOriginalData] = useState({
+    name: item.name || '',
+    type: item.type || 'ITEM',
+    visibility: item.visibility || 'PRIVATE',
+    description: item.description || '',
+    quantity: item.quantity?.toString() || '1',
+    nestable: item.nestable || false,
+    imageCount: 0,
+    containerUuid: null
+  });
   const [cameraOpen, setCameraOpen] = useState(false);
   const videoRef = useRef(null);
   const [itemUuid, setItemUuid] = useState(item.uuid || null);
@@ -47,6 +59,33 @@ export default function CreateItemScreen({ route, navigation }) {
       setImagesToDelete([]);
     }
   }, [route.params?.item?.uuid]);
+
+  const hasChanges = () => {
+    if (!itemUuid) return false; // No changes tracking for new items
+    
+    return (
+      name !== originalData.name ||
+      type !== originalData.type ||
+      visibility !== originalData.visibility ||
+      description !== originalData.description ||
+      quantity !== originalData.quantity ||
+      nestable !== originalData.nestable ||
+      images.length !== originalData.imageCount ||
+      imagesToDelete.length > 0 ||
+      (selectedContainer?.uuid || null) !== originalData.containerUuid
+    );
+  };
+
+  const handleBackPress = () => {
+    if (hasChanges()) {
+      setConfirmDialogData({
+        action: 'discard'
+      });
+      setConfirmDialogVisible(true);
+    } else {
+      navigation.goBack();
+    }
+  };
 
   const fetchItemDetails = async () => {
     try {
@@ -68,6 +107,19 @@ export default function CreateItemScreen({ route, navigation }) {
       setNestable(response.data.nestable || false);
       // Store the full image object so we have the uuid for deletion
       setImages(response.data.images || []);
+      
+      // Store original values for change detection
+      setOriginalData({
+        name: response.data.name || '',
+        type: parseEnum(response.data.type, 'ITEM'),
+        visibility: parseEnum(response.data.visibility, 'PRIVATE'),
+        description: response.data.description || '',
+        quantity: response.data.quantity?.toString() || '1',
+        nestable: response.data.nestable || false,
+        imageCount: response.data.images?.length || 0,
+        containerUuid: response.data.locationEntityUUID || null
+      });
+      
       // Load container info if item is nested
       if (response.data.locationEntityUUID) {
         loadContainerInfo(response.data.locationEntityUUID);
@@ -152,7 +204,16 @@ export default function CreateItemScreen({ route, navigation }) {
     setConfirmDialogVisible(true);
   };
 
-  const handleConfirmDelete = async () => {
+  const handleConfirmAction = async () => {
+    if (confirmDialogData.action === 'discard') {
+      // User confirmed discarding changes - go back without saving
+      setConfirmDialogVisible(false);
+      setConfirmDialogData(null);
+      navigation.goBack();
+      return;
+    }
+    
+    // Handle image deletion
     const { index, imageObj, isServerImage } = confirmDialogData;
     setConfirmDialogVisible(false);
 
@@ -577,12 +638,23 @@ export default function CreateItemScreen({ route, navigation }) {
       />
       <ConfirmDialog
         visible={confirmDialogVisible}
-        title={confirmDialogData?.title || 'Confirm'}
-        message={confirmDialogData?.message || ''}
-        onConfirm={handleConfirmDelete}
+        title={confirmDialogData?.action === 'discard' ? 'Discard Changes?' : (confirmDialogData?.title || 'Confirm')}
+        message={
+          confirmDialogData?.action === 'discard' 
+            ? 'You have unsaved changes. Are you sure you want to discard them and go back?'
+            : (confirmDialogData?.message || '')
+        }
+        onConfirm={handleConfirmAction}
         onCancel={handleCancelDelete}
       />
-      <Text style={styles.header}>{itemUuid ? 'Edit Item' : 'Create New Item'}</Text>
+      <View style={styles.headerContainer}>
+        {itemUuid && (
+          <TouchableOpacity style={styles.backButton} onPress={handleBackPress}>
+            <Ionicons name="arrow-back" size={24} color={colors.primary} />
+          </TouchableOpacity>
+        )}
+        <Text style={styles.header}>{itemUuid ? 'Edit Item' : 'Create New Item'}</Text>
+      </View>
       <TextInput
         style={styles.input}
         placeholder="Name"
@@ -736,11 +808,23 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
     padding: 20,
   },
+  headerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 20,
+    position: 'relative',
+  },
+  backButton: {
+    position: 'absolute',
+    left: 0,
+    zIndex: 1,
+    padding: 5,
+  },
   header: {
     fontSize: 24,
     fontWeight: 'bold',
     color: colors.primary,
-    marginBottom: 20,
+    flex: 1,
     textAlign: 'center',
   },
   input: {
