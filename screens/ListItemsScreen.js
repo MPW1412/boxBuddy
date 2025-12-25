@@ -4,6 +4,7 @@ import axios from 'axios';
 import colors from '../constants/colors';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
+import { useAuth } from '../contexts/AuthContext';
 
 const API_URL = Platform.OS === 'web' 
   ? (typeof window !== 'undefined' && window.location.origin.includes('boxbuddy.walther.haus') 
@@ -12,6 +13,7 @@ const API_URL = Platform.OS === 'web'
   : 'http://localhost:5000';
 
 export default function ListItemsScreen({ navigation, onPinContainer }) {
+  const { user } = useAuth();
   const [items, setItems] = useState([]);
   const [containers, setContainers] = useState({});
   const [searchQuery, setSearchQuery] = useState('');
@@ -20,6 +22,12 @@ export default function ListItemsScreen({ navigation, onPinContainer }) {
   const [hasMore, setHasMore] = useState(true);
   const [offset, setOffset] = useState(0);
   const LIMIT = 15;
+  
+  // Helper to get entity name by UUID
+  const getEntityName = (entityUuid) => {
+    const entity = user?.entities?.find(e => e.uuid === entityUuid);
+    return entity?.name || 'Unknown';
+  };
 
   useEffect(() => {
     fetchItems(true);
@@ -142,6 +150,7 @@ export default function ListItemsScreen({ navigation, onPinContainer }) {
         </View>
       <Text style={styles.subtitle}>Type: {item.type}</Text>
       <Text style={styles.subtitle}>Visibility: {item.visibility}</Text>
+      <Text style={styles.subtitle}>Entity: {getEntityName(item.owningEntity)}</Text>
       {item.locationEntityUUID && containers[item.locationEntityUUID] && (
         <TouchableOpacity 
           style={styles.containerInfo}

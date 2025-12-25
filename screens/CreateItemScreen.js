@@ -10,6 +10,7 @@ import ReactCrop from 'react-image-crop';
 import 'react-image-crop/dist/ReactCrop.css';
 import Toast from '../components/Toast';
 import ConfirmDialog from '../components/ConfirmDialog';
+import { useAuth } from '../contexts/AuthContext';
 
 const API_URL = Platform.OS === 'web' 
   ? (typeof window !== 'undefined' && window.location.origin.includes('boxbuddy.walther.haus') 
@@ -19,6 +20,8 @@ const API_URL = Platform.OS === 'web'
 const { height } = Dimensions.get('window');
 
 export default function CreateItemScreen({ route, navigation }) {
+  const { user } = useAuth();
+  
   // Get UUID from route params (for URL routing)
   const uuidFromRoute = route.params?.uuid;
   const item = route.params?.item || {};
@@ -26,6 +29,7 @@ export default function CreateItemScreen({ route, navigation }) {
   const [name, setName] = useState('');
   const [type, setType] = useState('ITEM');
   const [visibility, setVisibility] = useState('PRIVATE');
+  const [owningEntity, setOwningEntity] = useState(user?.entities?.[0]?.uuid || '');
   const [description, setDescription] = useState('');
   const [quantity, setQuantity] = useState('1');
   const [nestable, setNestable] = useState(false);
@@ -41,6 +45,7 @@ export default function CreateItemScreen({ route, navigation }) {
     name: '',
     type: 'ITEM',
     visibility: 'PRIVATE',
+    owningEntity: user?.entities?.[0]?.uuid || '',
     description: '',
     quantity: '1',
     nestable: false,
@@ -71,6 +76,7 @@ export default function CreateItemScreen({ route, navigation }) {
       name !== originalData.name ||
       type !== originalData.type ||
       visibility !== originalData.visibility ||
+      owningEntity !== originalData.owningEntity ||
       description !== originalData.description ||
       quantity !== originalData.quantity ||
       nestable !== originalData.nestable ||
@@ -117,6 +123,7 @@ export default function CreateItemScreen({ route, navigation }) {
       setName(response.data.name || '');
       setType(parseEnum(response.data.type, 'ITEM'));
       setVisibility(parseEnum(response.data.visibility, 'PRIVATE'));
+      setOwningEntity(response.data.owningEntity || user?.entities?.[0]?.uuid || '');
       setDescription(response.data.description || '');
       setQuantity(response.data.quantity?.toString() || '1');
       setNestable(response.data.nestable || false);
@@ -128,6 +135,7 @@ export default function CreateItemScreen({ route, navigation }) {
         name: response.data.name || '',
         type: parseEnum(response.data.type, 'ITEM'),
         visibility: parseEnum(response.data.visibility, 'PRIVATE'),
+        owningEntity: response.data.owningEntity || user?.entities?.[0]?.uuid || '',
         description: response.data.description || '',
         quantity: response.data.quantity?.toString() || '1',
         nestable: response.data.nestable || false,
@@ -257,6 +265,7 @@ export default function CreateItemScreen({ route, navigation }) {
     }
     try {
       const data = { name: name.trim(), type, visibility, nestable };
+      if (owningEntity) data.owningEntity = owningEntity;
       if (description.trim()) data.description = description.trim();
       if (quantity) data.quantity = parseInt(quantity);
       const response = await axios.post(`${API_URL}/items`, data);
@@ -291,6 +300,7 @@ export default function CreateItemScreen({ route, navigation }) {
       setName('');
       setType('ITEM');
       setVisibility('PRIVATE');
+      setOwningEntity(user?.entities?.[0]?.uuid || '');
       setDescription('');
       setQuantity('1');
       setNestable(false);
@@ -305,6 +315,7 @@ export default function CreateItemScreen({ route, navigation }) {
     if (!itemUuid) return;
     try {
       const data = { name: name.trim(), type, visibility, nestable };
+      if (owningEntity) data.owningEntity = owningEntity;
       if (description.trim()) data.description = description.trim();
       if (quantity) data.quantity = parseInt(quantity);
       
@@ -687,13 +698,29 @@ export default function CreateItemScreen({ route, navigation }) {
         onChangeText={setType}
         placeholderTextColor={colors.text}
       />
-      <TextInput
-        style={styles.input}
-        placeholder="Visibility (PRIVATE, SAME_INSTANCE, PUBLIC)"
-        value={visibility}
-        onChangeText={setVisibility}
-        placeholderTextColor={colors.text}
-      />
+      <View style={styles.pickerContainer}>
+        <Picker
+          selectedValue={visibility}
+          onValueChange={(itemValue) => setVisibility(itemValue)}
+          style={styles.picker}
+        >
+          <Picker.Item label="Private" value="PRIVATE" />
+          <Picker.Item label="Same Instance" value="SAME_INSTANCE" />
+          <Picker.Item label="Public" value="PUBLIC" />
+        </Picker>
+      </View>
+      
+      <View style={styles.pickerContainer}>
+        <Picker
+          selectedValue={owningEntity}
+          onValueChange={(itemValue) => setOwningEntity(itemValue)}
+          style={styles.picker}
+        >
+          {user?.entities?.map((entity) => (
+            <Picker.Item key={entity.uuid} label={entity.name} value={entity.uuid} />
+          ))}
+        </Picker>
+      </View>
       <TextInput
         style={styles.input}
         placeholder="Description (optional)"
