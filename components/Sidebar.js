@@ -170,21 +170,22 @@ export default function Sidebar({ navigation, pinnedContainers = [], onRemovePin
 
   return (
     <View style={styles.sidebar}>
-      <TouchableOpacity style={styles.createItem} onPress={() => navigation && navigation.navigate('Create Item')}>
-        <Ionicons name="add-circle" size={40} color={colors.card} />
-      </TouchableOpacity>
-      <TouchableOpacity style={styles.listItem} onPress={() => navigation && navigation.navigate('List Items')}>
-        <Ionicons name="list" size={40} color={colors.card} />
-      </TouchableOpacity>
-      <TouchableOpacity style={styles.binItem} onPress={() => navigation && navigation.navigate('Bin')}>
-        <Ionicons name="trash-outline" size={40} color={colors.card} />
-      </TouchableOpacity>
-      
-      {/* Pinned Containers */}
-      {pinnedContainers.map(renderContainerButton)}
-      
-      {/* Pin Zone - Drop containers here to pin them (appears after last container) */}
-      {Platform.OS === 'web' && (
+      <View style={styles.topSection}>
+        <TouchableOpacity style={styles.createItem} onPress={() => navigation && navigation.navigate('Create Item')}>
+          <Ionicons name="add-circle" size={40} color={colors.card} />
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.listItem} onPress={() => navigation && navigation.navigate('List Items')}>
+          <Ionicons name="list" size={40} color={colors.card} />
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.binItem} onPress={() => navigation && navigation.navigate('Bin')}>
+          <Ionicons name="trash-outline" size={40} color={colors.card} />
+        </TouchableOpacity>
+        
+        {/* Pinned Containers */}
+        {pinnedContainers.map(renderContainerButton)}
+        
+        {/* Pin Zone - Drop containers here to pin them (appears after last container) */}
+        {Platform.OS === 'web' && (
         <div
           onDrop={handlePinZoneDrop}
           onDragOver={handlePinZoneDragOver}
@@ -222,6 +223,17 @@ export default function Sidebar({ navigation, pinnedContainers = [], onRemovePin
           )}
         </div>
       )}
+      </View>
+      
+      {/* User icon at bottom */}
+      <View style={styles.bottomSection}>
+        <TouchableOpacity 
+          style={styles.userButton} 
+          onPress={() => navigation && navigation.navigate('User Settings')}
+        >
+          <Ionicons name="person-circle-outline" size={40} color={colors.card} />
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }
@@ -235,6 +247,22 @@ const styles = StyleSheet.create({
     paddingRight: 3,
     borderRightWidth: 1,
     borderRightColor: colors.border,
+    flexDirection: 'column',
+    justifyContent: 'space-between',
+  },
+  topSection: {
+    flex: 1,
+  },
+  bottomSection: {
+    paddingBottom: 10,
+  },
+  userButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 10,
+    marginVertical: 3,
+    backgroundColor: '#666666',
+    borderRadius: 8,
   },
   createItem: {
     alignItems: 'center',
