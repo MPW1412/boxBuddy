@@ -149,10 +149,6 @@ export default function Sidebar({ navigation, pinnedContainers = [], onRemovePin
             position: 'relative',
             marginTop: 3,
             marginBottom: 3,
-            padding: 3,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
             borderRadius: 8,
             border: isDropTarget ? '2px solid #14d91d' : '2px solid transparent',
             backgroundColor: isDropTarget ? 'rgba(20, 217, 29, 0.1)' : 'transparent',
@@ -196,11 +192,7 @@ export default function Sidebar({ navigation, pinnedContainers = [], onRemovePin
             position: 'relative',
             marginTop: 3,
             marginBottom: 3,
-            padding: 3,
-            minHeight: 60,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
+            minHeight: 74,
             transition: 'min-height 0.2s ease',
           }}
         >
@@ -208,10 +200,10 @@ export default function Sidebar({ navigation, pinnedContainers = [], onRemovePin
             <div
               style={{
                 position: 'absolute',
-                top: 3,
-                left: 3,
-                width: 54,
-                height: 54,
+                top: 0,
+                left: 0,
+                width: 74,
+                height: 74,
                 borderRadius: 8,
                 border: '2px dashed #0092cc',
                 backgroundColor: 'rgba(0, 146, 204, 0.1)',
@@ -222,7 +214,7 @@ export default function Sidebar({ navigation, pinnedContainers = [], onRemovePin
                 pointerEvents: 'none',
               }}
             >
-              <span style={{ fontSize: 9, color: '#0092cc', textAlign: 'center', fontWeight: 'bold', pointerEvents: 'none', lineHeight: '1.2' }}>
+              <span style={{ fontSize: 10, color: '#0092cc', textAlign: 'center', fontWeight: 'bold', pointerEvents: 'none', lineHeight: '1.2' }}>
                 Drop to pin
               </span>
             </div>
@@ -269,9 +261,6 @@ const styles = StyleSheet.create({
   containerItem: {
     position: 'relative',
     marginVertical: 3,
-    padding: 3,
-    alignItems: 'center',
-    justifyContent: 'center',
     borderRadius: 8,
     borderWidth: 2,
     borderColor: 'transparent',
@@ -281,8 +270,8 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(20, 217, 29, 0.1)',
   },
   containerButton: {
-    width: 54,
-    height: 54,
+    width: 74,
+    height: 74,
     borderRadius: 8,
     overflow: 'hidden',
     backgroundColor: '#f0f0f0',
@@ -299,7 +288,7 @@ const styles = StyleSheet.create({
     padding: 0,
   },
   containerText: {
-    fontSize: 9,
+    fontSize: 10,
     fontWeight: 'bold',
     color: colors.text,
     textAlign: 'center',
