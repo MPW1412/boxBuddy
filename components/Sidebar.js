@@ -86,8 +86,12 @@ export default function Sidebar({ navigation, pinnedContainers = [], onRemovePin
     setDragOverPinZone(true);
   };
 
-  const handlePinZoneDragLeave = () => {
-    setDragOverPinZone(false);
+  const handlePinZoneDragLeave = (e) => {
+    // Only clear if leaving the container itself, not a child
+    if (e.currentTarget === e.target) {
+      console.log('Leaving pin zone');
+      setDragOverPinZone(false);
+    }
   };
 
   const handleDragOver = (e, containerUuid) => {
@@ -205,9 +209,10 @@ export default function Sidebar({ navigation, pinnedContainers = [], onRemovePin
                 alignItems: 'center',
                 justifyContent: 'center',
                 transition: 'all 0.2s ease',
+                pointerEvents: 'none',
               }}
             >
-              <span style={{ fontSize: 10, color: '#0092cc', textAlign: 'center', fontWeight: 'bold' }}>
+              <span style={{ fontSize: 10, color: '#0092cc', textAlign: 'center', fontWeight: 'bold', pointerEvents: 'none' }}>
                 Drop to pin
               </span>
             </div>
