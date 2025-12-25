@@ -3,6 +3,7 @@ import { View, Text, FlatList, StyleSheet, TouchableOpacity, Image, ScrollView, 
 import axios from 'axios';
 import colors from '../constants/colors';
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 
 const API_URL = Platform.OS === 'web' 
   ? (typeof window !== 'undefined' && window.location.origin.includes('boxbuddy.walther.haus') 
@@ -23,6 +24,13 @@ export default function ListItemsScreen({ navigation }) {
   useEffect(() => {
     fetchItems(true);
   }, []);
+
+  // Refresh list when screen comes into focus (e.g., after deleting an item)
+  useFocusEffect(
+    useCallback(() => {
+      fetchItems(true);
+    }, [])
+  );
 
   useEffect(() => {
     // Debounce search
