@@ -123,7 +123,7 @@ export default function ListItemsScreen({ navigation }) {
       {item.images && item.images.length > 0 && (
         <ScrollView horizontal style={styles.imageScroll}>
           {item.images.map((img, index) => (
-            <Image key={index} source={{ uri: `${API_URL}/images/${img.uuid}` }} style={styles.thumbnail} />
+            <Image key={index} source={{ uri: `${API_URL}/images/${img.uuid}` }} style={styles.thumbnail} resizeMode="contain" />
           ))}
         </ScrollView>
       )}

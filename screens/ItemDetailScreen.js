@@ -92,6 +92,7 @@ export default function ItemDetailScreen({ route, navigation }) {
         <Image
           source={{ uri: `${API_URL}/images/${containedItem.images[0].uuid}` }}
           style={styles.containedItemImage}
+          resizeMode="contain"
         />
       )}
     </TouchableOpacity>
@@ -168,6 +169,7 @@ export default function ItemDetailScreen({ route, navigation }) {
                 key={index}
                 source={{ uri: `${API_URL}/images/${img.uuid}` }}
                 style={styles.photo}
+                resizeMode="contain"
               />
             ))}
           </ScrollView>
@@ -200,6 +202,7 @@ export default function ItemDetailScreen({ route, navigation }) {
                   <Image
                     source={{ uri: `${API_URL}/images/${containedItem.images[0].uuid}` }}
                     style={styles.containedItemImage}
+                    resizeMode="contain"
                   />
                 )}
               </TouchableOpacity>
