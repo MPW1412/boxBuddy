@@ -147,8 +147,7 @@ export default function Sidebar({ navigation, pinnedContainers = [], onRemovePin
           onDragLeave={handleDragLeave}
           style={{
             position: 'relative',
-            marginTop: 3,
-            marginBottom: 3,
+            margin: 0,
             padding: 0,
             borderRadius: 8,
             border: isDropTarget ? '2px solid #14d91d' : '2px solid transparent',
@@ -261,7 +260,8 @@ const styles = StyleSheet.create({
   },
   containerItem: {
     position: 'relative',
-    marginVertical: 3,
+    margin: 0,
+    padding: 0,
     borderRadius: 8,
     borderWidth: 2,
     borderColor: 'transparent',
