@@ -214,64 +214,62 @@ export default function ItemDetailScreen({ route, navigation }) {
           activeOpacity={1}
           onPress={closeImageViewer}
         >
-          <View style={styles.imageViewerContent}>
-            {/* Close Button */}
-            <TouchableOpacity style={styles.closeButton} onPress={closeImageViewer}>
-              <Ionicons name="close" size={32} color="white" />
-            </TouchableOpacity>
+          {/* Close Button */}
+          <TouchableOpacity 
+            style={styles.closeButton} 
+            onPress={(e) => {
+              e.stopPropagation();
+              closeImageViewer();
+            }}
+          >
+            <Ionicons name="close" size={32} color="white" />
+          </TouchableOpacity>
 
-            {/* Image - Prevent close when clicking image itself */}
-            <TouchableOpacity 
-              activeOpacity={1}
-              onPress={(e) => e.stopPropagation()}
-              style={styles.imageContainer}
-            >
-              {detailedItem.images && detailedItem.images[selectedImageIndex] && (
-                <Image
-                  source={{ uri: `${API_URL}/images/${detailedItem.images[selectedImageIndex].uuid}` }}
-                  style={styles.fullscreenImage}
-                  resizeMode="contain"
-                />
+          {/* Image - Prevent close when clicking image itself */}
+          {detailedItem.images && detailedItem.images[selectedImageIndex] && (
+            <Image
+              source={{ uri: `${API_URL}/images/${detailedItem.images[selectedImageIndex].uuid}` }}
+              style={styles.fullscreenImage}
+              resizeMode="contain"
+            />
+          )}
+
+          {/* Navigation Arrows */}
+          {detailedItem.images && detailedItem.images.length > 1 && (
+            <>
+              {selectedImageIndex > 0 && (
+                <TouchableOpacity 
+                  style={styles.navButtonLeft} 
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    previousImage();
+                  }}
+                >
+                  <Ionicons name="chevron-back" size={40} color="white" />
+                </TouchableOpacity>
               )}
-            </TouchableOpacity>
+              {selectedImageIndex < detailedItem.images.length - 1 && (
+                <TouchableOpacity 
+                  style={styles.navButtonRight} 
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    nextImage();
+                  }}
+                >
+                  <Ionicons name="chevron-forward" size={40} color="white" />
+                </TouchableOpacity>
+              )}
+            </>
+          )}
 
-            {/* Navigation Arrows */}
-            {detailedItem.images && detailedItem.images.length > 1 && (
-              <>
-                {selectedImageIndex > 0 && (
-                  <TouchableOpacity 
-                    style={styles.navButtonLeft} 
-                    onPress={(e) => {
-                      e.stopPropagation();
-                      previousImage();
-                    }}
-                  >
-                    <Ionicons name="chevron-back" size={40} color="white" />
-                  </TouchableOpacity>
-                )}
-                {selectedImageIndex < detailedItem.images.length - 1 && (
-                  <TouchableOpacity 
-                    style={styles.navButtonRight} 
-                    onPress={(e) => {
-                      e.stopPropagation();
-                      nextImage();
-                    }}
-                  >
-                    <Ionicons name="chevron-forward" size={40} color="white" />
-                  </TouchableOpacity>
-                )}
-              </>
-            )}
-
-            {/* Image Counter */}
-            {detailedItem.images && detailedItem.images.length > 1 && (
-              <View style={styles.imageCounter}>
-                <Text style={styles.imageCounterText}>
-                  {selectedImageIndex + 1} / {detailedItem.images.length}
-                </Text>
-              </View>
-            )}
-          </View>
+          {/* Image Counter */}
+          {detailedItem.images && detailedItem.images.length > 1 && (
+            <View style={styles.imageCounter}>
+              <Text style={styles.imageCounterText}>
+                {selectedImageIndex + 1} / {detailedItem.images.length}
+              </Text>
+            </View>
+          )}
         </TouchableOpacity>
       </Modal>
 
@@ -523,21 +521,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  imageViewerContent: {
+  fullscreenImage: {
     width: '90%',
     height: '90%',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  imageContainer: {
-    width: '100%',
-    height: '100%',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  fullscreenImage: {
-    width: '100%',
-    height: '100%',
   },
   closeButton: {
     position: 'absolute',
