@@ -150,7 +150,7 @@ export default function ListItemsScreen({ navigation }) {
     if (isLoading) return null;
     return (
       <View style={styles.emptyContainer}>
-        <Ionicons name="search-outline" size={64} color={colors.text} opacity={0.3} />
+        <Ionicons name="search-outline" size={64} color={colors.text} style={{ opacity: 0.3 }} />
         <Text style={styles.emptyText}>
           {searchQuery ? 'No items found' : 'No items yet'}
         </Text>
