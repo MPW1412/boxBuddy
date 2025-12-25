@@ -48,6 +48,7 @@ const linking = {
 
 function AppNavigator() {
   const navigationRef = useRef();
+  const listItemsRef = useRef();
   const [navigation, setNavigation] = useState(null);
   const [pinnedContainers, setPinnedContainers] = useState([]);
   const { user, loading } = useAuth();
@@ -96,6 +97,13 @@ function AppNavigator() {
     }
   };
 
+  const handleItemMoved = () => {
+    // Trigger refresh in ListItemsScreen when an item is moved
+    if (listItemsRef.current?.refresh) {
+      listItemsRef.current.refresh();
+    }
+  };
+
   if (loading) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background }}>
@@ -128,13 +136,14 @@ function AppNavigator() {
           pinnedContainers={pinnedContainers}
           onRemovePinned={removePinnedContainer}
           onPinContainer={addPinnedContainer}
+          onItemMoved={handleItemMoved}
         />
         <View style={{ flex: 1 }}>
           <Stack.Navigator initialRouteName="List Items" screenOptions={{ headerShown: false }}>
             <Stack.Screen name="Create Item" component={CreateItemScreen} />
             <Stack.Screen name="Edit Item" component={CreateItemScreen} />
             <Stack.Screen name="List Items">
-              {(props) => <ListItemsScreen {...props} onPinContainer={addPinnedContainer} />}
+              {(props) => <ListItemsScreen {...props} ref={listItemsRef} onPinContainer={addPinnedContainer} />}
             </Stack.Screen>
             <Stack.Screen name="Item Detail" component={ItemDetailScreen} />
             <Stack.Screen name="Bin" component={BinScreen} />

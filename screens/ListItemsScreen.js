@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, forwardRef, useImperativeHandle } from 'react';
 import { View, Text, FlatList, StyleSheet, TouchableOpacity, Image, ScrollView, Platform, TextInput, ActivityIndicator } from 'react-native';
 import axios from 'axios';
 import colors from '../constants/colors';
@@ -12,7 +12,7 @@ const API_URL = Platform.OS === 'web'
       : 'http://localhost:5000')
   : 'http://localhost:5000';
 
-export default function ListItemsScreen({ navigation, onPinContainer }) {
+const ListItemsScreen = forwardRef(({ navigation, onPinContainer }, ref) => {
   const { user } = useAuth();
   const [items, setItems] = useState([]);
   const [containers, setContainers] = useState({});
@@ -28,6 +28,13 @@ export default function ListItemsScreen({ navigation, onPinContainer }) {
     const entity = user?.entities?.find(e => e.uuid === entityUuid);
     return entity?.name || 'Unknown';
   };
+
+  // Expose refresh method to parent via ref
+  useImperativeHandle(ref, () => ({
+    refresh: () => {
+      fetchItems(true);
+    }
+  }));
 
   useEffect(() => {
     fetchItems(true);
@@ -249,7 +256,9 @@ export default function ListItemsScreen({ navigation, onPinContainer }) {
       />
     </View>
   );
-}
+});
+
+export default ListItemsScreen;
 
 const styles = StyleSheet.create({
   container: {

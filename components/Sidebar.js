@@ -29,7 +29,7 @@ const breakIntoLines = (text, maxCharsPerLine = 6) => {
   return lines.slice(0, 3); // Max 3 lines
 };
 
-export default function Sidebar({ navigation, pinnedContainers = [], onRemovePinned, onPinContainer }) {
+export default function Sidebar({ navigation, pinnedContainers = [], onRemovePinned, onPinContainer, onItemMoved }) {
   const [dragOverContainer, setDragOverContainer] = useState(null);
   const [dragOverPinZone, setDragOverPinZone] = useState(false);
 
@@ -43,6 +43,11 @@ export default function Sidebar({ navigation, pinnedContainers = [], onRemovePin
         // Store item in container
         await axios.post(`${API_URL}/items/${itemUuid}/store/${containerUuid}`);
         console.log(`Item ${itemUuid} added to container ${containerUuid}`);
+        
+        // Notify that item was moved so the list can refresh
+        if (onItemMoved) {
+          onItemMoved();
+        }
       }
     } catch (error) {
       console.error('Error adding item to container:', error);
