@@ -209,34 +209,54 @@ export default function ItemDetailScreen({ route, navigation }) {
         animationType="fade"
         onRequestClose={closeImageViewer}
       >
-        <View style={styles.imageViewerContainer}>
-          <TouchableOpacity style={styles.imageViewerBackdrop} onPress={closeImageViewer} />
-          
+        <TouchableOpacity 
+          style={styles.imageViewerContainer}
+          activeOpacity={1}
+          onPress={closeImageViewer}
+        >
           <View style={styles.imageViewerContent}>
             {/* Close Button */}
             <TouchableOpacity style={styles.closeButton} onPress={closeImageViewer}>
               <Ionicons name="close" size={32} color="white" />
             </TouchableOpacity>
 
-            {/* Image */}
-            {detailedItem.images && detailedItem.images[selectedImageIndex] && (
-              <Image
-                source={{ uri: `${API_URL}/images/${detailedItem.images[selectedImageIndex].uuid}` }}
-                style={styles.fullscreenImage}
-                resizeMode="contain"
-              />
-            )}
+            {/* Image - Prevent close when clicking image itself */}
+            <TouchableOpacity 
+              activeOpacity={1}
+              onPress={(e) => e.stopPropagation()}
+              style={styles.imageContainer}
+            >
+              {detailedItem.images && detailedItem.images[selectedImageIndex] && (
+                <Image
+                  source={{ uri: `${API_URL}/images/${detailedItem.images[selectedImageIndex].uuid}` }}
+                  style={styles.fullscreenImage}
+                  resizeMode="contain"
+                />
+              )}
+            </TouchableOpacity>
 
             {/* Navigation Arrows */}
             {detailedItem.images && detailedItem.images.length > 1 && (
               <>
                 {selectedImageIndex > 0 && (
-                  <TouchableOpacity style={styles.navButtonLeft} onPress={previousImage}>
+                  <TouchableOpacity 
+                    style={styles.navButtonLeft} 
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      previousImage();
+                    }}
+                  >
                     <Ionicons name="chevron-back" size={40} color="white" />
                   </TouchableOpacity>
                 )}
                 {selectedImageIndex < detailedItem.images.length - 1 && (
-                  <TouchableOpacity style={styles.navButtonRight} onPress={nextImage}>
+                  <TouchableOpacity 
+                    style={styles.navButtonRight} 
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      nextImage();
+                    }}
+                  >
                     <Ionicons name="chevron-forward" size={40} color="white" />
                   </TouchableOpacity>
                 )}
@@ -252,7 +272,7 @@ export default function ItemDetailScreen({ route, navigation }) {
               </View>
             )}
           </View>
-        </View>
+        </TouchableOpacity>
       </Modal>
 
       {/* Contained Items (for nestable items) */}
@@ -503,16 +523,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  imageViewerBackdrop: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-  },
   imageViewerContent: {
     width: '90%',
     height: '90%',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  imageContainer: {
+    width: '100%',
+    height: '100%',
     justifyContent: 'center',
     alignItems: 'center',
   },
