@@ -150,8 +150,16 @@ const ListItemsScreen = forwardRef(({ navigation, onPinContainer }, ref) => {
       if (response.data.auto_print_triggered) {
         if (response.data.pdf_url) {
           const fullUrl = `${API_URL}${response.data.pdf_url}`;
-          window.open(fullUrl, '_blank');
-          alert(`Sheet complete! ${response.data.labels_printed} labels ready.`);
+          const printWindow = window.open(fullUrl, '_blank');
+          
+          // Try to auto-trigger print dialog when PDF loads
+          if (printWindow) {
+            printWindow.onload = function() {
+              printWindow.print();
+            };
+          }
+          
+          alert(`Sheet complete! ${response.data.labels_printed} labels ready. Print dialog will open.`);
         } else if (response.data.print_job_id) {
           alert(`Print job ${response.data.print_job_id} sent! ${response.data.labels_printed} labels.`);
         }
