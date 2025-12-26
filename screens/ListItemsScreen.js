@@ -135,25 +135,79 @@ const ListItemsScreen = forwardRef(({ navigation, onPinContainer }, ref) => {
     }
   };
 
+  const queueLabel = async (e, item, labelType, quantity) => {
+    e.stopPropagation();
+    
+    try {
+      const response = await axios.post(`${API_URL}/labels/queue`, {
+        item_uuid: item.uuid,
+        label_type: labelType,
+        quantity: quantity
+      });
+      
+      // Since we don't have Toast in this component context, we'll use alert for now
+      // Could import Toast or pass showToast from parent
+      if (response.data.auto_print_triggered) {
+        if (response.data.pdf_url) {
+          const fullUrl = `${API_URL}${response.data.pdf_url}`;
+          window.open(fullUrl, '_blank');
+          alert(`Sheet complete! ${response.data.labels_printed} labels ready.`);
+        } else if (response.data.print_job_id) {
+          alert(`Print job ${response.data.print_job_id} sent! ${response.data.labels_printed} labels.`);
+        }
+      } else {
+        alert(`Label queued (${response.data.queue_length}/${response.data.sheet_capacity})`);
+      }
+    } catch (error) {
+      console.error('Failed to queue label:', error);
+      alert('Failed to queue label: ' + (error.response?.data?.error || error.message));
+    }
+  };
+
   const renderItem = ({ item }) => {
     const cardContent = (
       <TouchableOpacity style={styles.card} onPress={() => navigation.navigate('Item Detail', { uuid: item.uuid })}>
         <View style={styles.titleRow}>
           <Text style={styles.title}>{item.name}</Text>
-          {item.nestable && (
-            <View style={styles.titleRowActions}>
-              <View style={styles.nestableBadge}>
-                <Ionicons name="archive" size={16} color={colors.primary} />
-                <Text style={styles.nestableText}>Container</Text>
-              </View>
-              <TouchableOpacity 
-                style={styles.pinButton}
-                onPress={(e) => handlePinContainer(e, item)}
-              >
-                <Ionicons name="push-outline" size={20} color={colors.primary} />
-              </TouchableOpacity>
-            </View>
-          )}
+          <View style={styles.titleRowActions}>
+            {/* QR Label buttons */}
+            <TouchableOpacity 
+              style={styles.qrSmallButton}
+              onPress={(e) => queueLabel(e, item, 'small', 1)}
+            >
+              <Ionicons name="qr-code" size={12} color="white" />
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={styles.qrWideButton}
+              onPress={(e) => queueLabel(e, item, 'wide', 1)}
+            >
+              <Ionicons name="qr-code" size={10} color="white" />
+              <Text style={styles.qrButtonLabel}>▭</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={styles.qrWide3Button}
+              onPress={(e) => queueLabel(e, item, 'wide', 3)}
+            >
+              <Ionicons name="qr-code" size={10} color="white" />
+              <Text style={styles.qrButtonLabel}>×3</Text>
+            </TouchableOpacity>
+            
+            {/* Container badge and pin button (if nestable) */}
+            {item.nestable && (
+              <>
+                <View style={styles.nestableBadge}>
+                  <Ionicons name="archive" size={16} color={colors.primary} />
+                  <Text style={styles.nestableText}>Container</Text>
+                </View>
+                <TouchableOpacity 
+                  style={styles.pinButton}
+                  onPress={(e) => handlePinContainer(e, item)}
+                >
+                  <Ionicons name="push-outline" size={20} color={colors.primary} />
+                </TouchableOpacity>
+              </>
+            )}
+          </View>
         </View>
       <Text style={styles.subtitle}>Type: {item.type}</Text>
       <Text style={styles.subtitle}>Visibility: {item.visibility}</Text>
@@ -394,5 +448,37 @@ const styles = StyleSheet.create({
   },
   pinButton: {
     padding: 4,
+  },
+  qrSmallButton: {
+    backgroundColor: '#0092cc',
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  qrWideButton: {
+    backgroundColor: '#0092cc',
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+  },
+  qrWide3Button: {
+    backgroundColor: '#0092cc',
+    width: 36,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+  },
+  qrButtonLabel: {
+    color: 'white',
+    fontSize: 8,
+    fontWeight: 'bold',
+    marginLeft: 1,
   },
 });

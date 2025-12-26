@@ -103,6 +103,35 @@ export default function ItemDetailScreen({ route, navigation }) {
     setToastVisible(true);
   };
 
+  const queueLabel = async (labelType, quantity) => {
+    try {
+      const response = await axios.post(`${API_URL}/labels/queue`, {
+        item_uuid: detailedItem.uuid,
+        label_type: labelType,
+        quantity: quantity
+      });
+      
+      if (response.data.auto_print_triggered) {
+        // Sheet is full - PDF generated
+        if (response.data.pdf_url) {
+          // Frontend mode - trigger download
+          const fullUrl = `${API_URL}${response.data.pdf_url}`;
+          window.open(fullUrl, '_blank');
+          showToast(`Sheet complete! ${response.data.labels_printed} labels ready.`, 'success');
+        } else if (response.data.print_job_id) {
+          // CUPS mode
+          showToast(`Print job ${response.data.print_job_id} sent! ${response.data.labels_printed} labels.`, 'success');
+        }
+      } else {
+        // Sheet not full yet
+        showToast(`Label queued (${response.data.queue_length}/${response.data.sheet_capacity})`, 'success');
+      }
+    } catch (error) {
+      console.error('Failed to queue label:', error);
+      showToast('Failed to queue label: ' + (error.response?.data?.error || error.message), 'error');
+    }
+  };
+
   const openImageViewer = (index) => {
     setSelectedImageIndex(index);
     setImageViewerVisible(true);
@@ -171,6 +200,26 @@ export default function ItemDetailScreen({ route, navigation }) {
           <Ionicons name="arrow-back" size={24} color={colors.primary} />
         </TouchableOpacity>
         <View style={styles.headerButtons}>
+          <TouchableOpacity
+            style={styles.qrSmallButton}
+            onPress={() => queueLabel('small', 1)}
+          >
+            <Ionicons name="qr-code" size={16} color="white" />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.qrWideButton}
+            onPress={() => queueLabel('wide', 1)}
+          >
+            <Ionicons name="qr-code" size={16} color="white" />
+            <Text style={styles.qrButtonLabel}>▭</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.qrWide3Button}
+            onPress={() => queueLabel('wide', 3)}
+          >
+            <Ionicons name="qr-code" size={14} color="white" />
+            <Text style={styles.qrButtonLabel}>▭×3</Text>
+          </TouchableOpacity>
           <TouchableOpacity
             style={styles.editButton}
             onPress={() => navigation.navigate('Edit Item', { uuid: detailedItem.uuid })}
@@ -401,6 +450,38 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  qrSmallButton: {
+    backgroundColor: '#0092cc',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  qrWideButton: {
+    backgroundColor: '#0092cc',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+  },
+  qrWide3Button: {
+    backgroundColor: '#0092cc',
+    width: 50,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+  },
+  qrButtonLabel: {
+    color: 'white',
+    fontSize: 10,
+    fontWeight: 'bold',
+    marginLeft: 2,
   },
   itemDetails: {
     padding: 20,
