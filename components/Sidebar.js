@@ -230,8 +230,14 @@ export default function Sidebar({ navigation, pinnedContainers = [], onRemovePin
       )}
       </View>
       
-      {/* User icon at bottom */}
+      {/* Print Queue and User icons at bottom */}
       <View style={styles.bottomSection}>
+        <TouchableOpacity 
+          style={styles.printQueueButton} 
+          onPress={() => navigation && navigation.navigate('Print Queue')}
+        >
+          <Ionicons name="print-outline" size={40} color={colors.card} />
+        </TouchableOpacity>
         <TouchableOpacity 
           style={styles.userButton} 
           onPress={() => navigation && navigation.navigate('User Settings')}
@@ -260,6 +266,14 @@ const styles = StyleSheet.create({
   },
   bottomSection: {
     paddingBottom: 10,
+  },
+  printQueueButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 10,
+    marginVertical: 3,
+    backgroundColor: '#0092cc',
+    borderRadius: 8,
   },
   userButton: {
     alignItems: 'center',

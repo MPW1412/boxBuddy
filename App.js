@@ -8,6 +8,7 @@ import ItemDetailScreen from './screens/ItemDetailScreen';
 import BinScreen from './screens/BinScreen';
 import LoginScreen from './screens/LoginScreen';
 import UserSettingsScreen from './screens/UserSettingsScreen';
+import PrintQueueScreen from './screens/PrintQueueScreen';
 import Sidebar from './components/Sidebar';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import colors from './constants/colors';
@@ -42,6 +43,7 @@ const linking = {
       },
       'Bin': 'bin',
       'User Settings': 'settings',
+      'Print Queue': 'print-queue',
     },
   },
 };
@@ -151,6 +153,7 @@ function AppNavigator() {
             <Stack.Screen name="Item Detail" component={ItemDetailScreen} />
             <Stack.Screen name="Bin" component={BinScreen} />
             <Stack.Screen name="User Settings" component={UserSettingsScreen} />
+            <Stack.Screen name="Print Queue" component={PrintQueueScreen} />
           </Stack.Navigator>
         </View>
       </View>
