@@ -5,6 +5,7 @@ import colors from '../constants/colors';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { useAuth } from '../contexts/AuthContext';
+import Toast from '../components/Toast';
 
 const API_URL = Platform.OS === 'web' 
   ? (typeof window !== 'undefined' && window.location.origin.includes('boxbuddy.walther.haus') 
@@ -21,6 +22,9 @@ const ListItemsScreen = forwardRef(({ navigation, onPinContainer }, ref) => {
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const [offset, setOffset] = useState(0);
+  const [toastVisible, setToastVisible] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
+  const [toastType, setToastType] = useState('success');
   const LIMIT = 15;
   
   // Helper to get entity name by UUID
@@ -135,6 +139,12 @@ const ListItemsScreen = forwardRef(({ navigation, onPinContainer }, ref) => {
     }
   };
 
+  const showToast = (message, type = 'success') => {
+    setToastMessage(message);
+    setToastType(type);
+    setToastVisible(true);
+  };
+
   const queueLabel = async (e, item, labelType, quantity) => {
     e.stopPropagation();
     
@@ -145,8 +155,6 @@ const ListItemsScreen = forwardRef(({ navigation, onPinContainer }, ref) => {
         quantity: quantity
       });
       
-      // Since we don't have Toast in this component context, we'll use alert for now
-      // Could import Toast or pass showToast from parent
       if (response.data.auto_print_triggered) {
         if (response.data.pdf_url) {
           const fullUrl = `${API_URL}${response.data.pdf_url}`;
@@ -159,16 +167,16 @@ const ListItemsScreen = forwardRef(({ navigation, onPinContainer }, ref) => {
             };
           }
           
-          alert(`Sheet complete! ${response.data.labels_printed} labels ready. Print dialog will open.`);
+          showToast(`Sheet complete! ${response.data.labels_printed} labels ready. Print dialog will open.`, 'success');
         } else if (response.data.print_job_id) {
-          alert(`Print job ${response.data.print_job_id} sent! ${response.data.labels_printed} labels.`);
+          showToast(`Print job ${response.data.print_job_id} sent! ${response.data.labels_printed} labels.`, 'success');
         }
       } else {
-        alert(`Label queued (${response.data.queue_length}/${response.data.sheet_capacity})`);
+        showToast(`Label queued (${response.data.queue_length}/${response.data.sheet_capacity})`, 'success');
       }
     } catch (error) {
       console.error('Failed to queue label:', error);
-      alert('Failed to queue label: ' + (error.response?.data?.error || error.message));
+      showToast('Failed to queue label: ' + (error.response?.data?.error || error.message), 'error');
     }
   };
 
@@ -315,6 +323,13 @@ const ListItemsScreen = forwardRef(({ navigation, onPinContainer }, ref) => {
         onEndReachedThreshold={0.5}
         ListFooterComponent={renderFooter}
         ListEmptyComponent={renderEmpty}
+      />
+
+      <Toast
+        message={toastMessage}
+        type={toastType}
+        visible={toastVisible}
+        onHide={() => setToastVisible(false)}
       />
     </View>
   );
