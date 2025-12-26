@@ -113,23 +113,7 @@ export default function ItemDetailScreen({ route, navigation }) {
       
       if (response.data.auto_print_triggered) {
         // Sheet is full - PDF generated
-        if (response.data.pdf_url) {
-          // Frontend mode - open PDF in new window with auto-print
-          const fullUrl = `${API_URL}${response.data.pdf_url}`;
-          const printWindow = window.open(fullUrl, '_blank');
-          
-          // Try to auto-trigger print dialog when PDF loads
-          if (printWindow) {
-            printWindow.onload = function() {
-              printWindow.print();
-            };
-          }
-          
-          showToast(`Sheet complete! ${response.data.labels_printed} labels ready. Print dialog will open.`, 'success');
-        } else if (response.data.print_job_id) {
-          // CUPS mode
-          showToast(`Print job ${response.data.print_job_id} sent! ${response.data.labels_printed} labels.`, 'success');
-        }
+        showToast(`Sheet complete! ${response.data.labels_printed} labels ready. Go to Print Queue to download.`, 'success');
       } else {
         // Sheet not full yet
         showToast(`Label queued (${response.data.queue_length}/${response.data.sheet_capacity})`, 'success');

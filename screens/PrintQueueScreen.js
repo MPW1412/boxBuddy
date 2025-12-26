@@ -70,16 +70,16 @@ export default function PrintQueueScreen({ navigation }) {
       });
 
       if (response.data.pdf_url) {
+        // Download PDF directly without opening new window
         const fullUrl = `${API_URL}${response.data.pdf_url}`;
-        const printWindow = window.open(fullUrl, '_blank');
+        const link = document.createElement('a');
+        link.href = fullUrl;
+        link.download = response.data.pdf_url.split('/').pop();
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
 
-        if (printWindow) {
-          printWindow.onload = function() {
-            printWindow.print();
-          };
-        }
-
-        showToast(`Printing ${response.data.labels_count} ${labelType} labels`, 'success');
+        showToast(`PDF ready! ${response.data.labels_count} ${labelType} labels downloading`, 'success');
         loadQueues(); // Reload queues after printing
       }
     } catch (error) {

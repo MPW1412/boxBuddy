@@ -156,21 +156,8 @@ const ListItemsScreen = forwardRef(({ navigation, onPinContainer }, ref) => {
       });
       
       if (response.data.auto_print_triggered) {
-        if (response.data.pdf_url) {
-          const fullUrl = `${API_URL}${response.data.pdf_url}`;
-          const printWindow = window.open(fullUrl, '_blank');
-          
-          // Try to auto-trigger print dialog when PDF loads
-          if (printWindow) {
-            printWindow.onload = function() {
-              printWindow.print();
-            };
-          }
-          
-          showToast(`Sheet complete! ${response.data.labels_printed} labels ready. Print dialog will open.`, 'success');
-        } else if (response.data.print_job_id) {
-          showToast(`Print job ${response.data.print_job_id} sent! ${response.data.labels_printed} labels.`, 'success');
-        }
+        // Sheet is full - PDF generated
+        showToast(`Sheet complete! ${response.data.labels_printed} labels ready. Go to Print Queue to download.`, 'success');
       } else {
         showToast(`Label queued (${response.data.queue_length}/${response.data.sheet_capacity})`, 'success');
       }
