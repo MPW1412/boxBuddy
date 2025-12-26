@@ -82,9 +82,12 @@ function AppNavigator() {
       await axios.post(`${API_URL}/auth/pinned-containers`, {
         container_uuid: container.uuid
       });
+      // Only update local state if API call succeeded
       setPinnedContainers([...pinnedContainers, container]);
     } catch (error) {
       console.error('Failed to pin container:', error);
+      // Don't update local state on failure
+      alert('Failed to pin container: ' + (error.response?.data?.message || error.message));
     }
   };
 
