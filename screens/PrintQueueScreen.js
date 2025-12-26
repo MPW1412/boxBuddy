@@ -224,7 +224,7 @@ export default function PrintQueueScreen({ navigation }) {
       </View>
 
       {renderQueueSection('Small Labels (20x20mm)', smallQueue, 'small', 'square-outline')}
-      {renderQueueSection('Wide Labels (99x68mm)', wideQueue, 'wide', 'rectangle-outline')}
+      {renderQueueSection('Wide Labels (105x74mm)', wideQueue, 'wide', 'rectangle-outline')}
 
       <Toast
         message={toastMessage}
