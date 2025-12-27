@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -12,6 +12,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import colors from '../constants/colors';
 import Toast from '../components/Toast';
+import ConfirmDialog from '../components/ConfirmDialog';
 import axios from 'axios';
 
 const API_URL = Platform.OS === 'web'
@@ -28,12 +29,18 @@ export default function PrintQueueScreen({ navigation }) {
   const [toastVisible, setToastVisible] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
   const [toastType, setToastType] = useState('success');
-  const [offsetRows, setOffsetRows] = useState('0');
-  const [offsetColumns, setOffsetColumns] = useState('0');
+  const [offsetSettings, setOffsetSettings] = useState({
+    small: { rows: '0', columns: '0' },
+    wide: { rows: '0', columns: '0' }
+  });
+  const [showOffsetDialog, setShowOffsetDialog] = useState(false);
+  const [pendingPrintInfo, setPendingPrintInfo] = useState(null);
+  const saveTimerRef = useRef({});
 
   useEffect(() => {
     loadQueues();
     loadRecentPdfs();
+    loadOffsetSettings();
   }, []);
 
   const showToast = (message, type = 'success') => {
@@ -70,8 +77,60 @@ export default function PrintQueueScreen({ navigation }) {
     }
   };
 
+  const loadOffsetSettings = async () => {
+    try {
+      const response = await axios.get(`${API_URL}/auth/print-settings`);
+      const settings = {};
+      response.data.forEach(s => {
+        settings[s.label_type] = {
+          rows: String(s.offset_rows),
+          columns: String(s.offset_columns)
+        };
+      });
+      setOffsetSettings(settings);
+    } catch (error) {
+      console.error('Failed to load offset settings:', error);
+      // Use defaults on error
+    }
+  };
+
+  const handleOffsetChange = (labelType, field, value) => {
+    // Update local state immediately
+    setOffsetSettings(prev => ({
+      ...prev,
+      [labelType]: {
+        ...prev[labelType],
+        [field]: value
+      }
+    }));
+    
+    // Debounce save to backend
+    if (saveTimerRef.current[labelType]) {
+      clearTimeout(saveTimerRef.current[labelType]);
+    }
+    
+    saveTimerRef.current[labelType] = setTimeout(async () => {
+      try {
+        const currentSettings = {
+          ...offsetSettings[labelType],
+          [field]: value
+        };
+        
+        await axios.put(`${API_URL}/auth/print-settings`, {
+          label_type: labelType,
+          offset_rows: parseInt(currentSettings.rows) || 0,
+          offset_columns: parseInt(currentSettings.columns) || 0
+        });
+      } catch (error) {
+        console.error('Failed to save offset settings:', error);
+        showToast('Failed to save offset settings', 'error');
+      }
+    }, 500); // 500ms debounce
+  };
+
   const handlePrint = async (labelType) => {
     const queue = labelType === 'small' ? smallQueue : wideQueue;
+    const currentSettings = offsetSettings[labelType];
     
     if (queue.queue_length === 0) {
       showToast('Queue is empty', 'error');
@@ -82,8 +141,8 @@ export default function PrintQueueScreen({ navigation }) {
       const response = await axios.post(`${API_URL}/labels/print`, {
         label_type: labelType,
         fill_remaining: false,
-        offset_rows: parseInt(offsetRows) || 0,
-        offset_columns: parseInt(offsetColumns) || 0
+        offset_rows: parseInt(currentSettings?.rows) || 0,
+        offset_columns: parseInt(currentSettings?.columns) || 0
       });
 
       if (response.data.pdf_url) {
@@ -96,13 +155,83 @@ export default function PrintQueueScreen({ navigation }) {
         link.click();
         document.body.removeChild(link);
 
-        showToast(`PDF ready! ${response.data.labels_count} ${labelType} labels downloading`, 'success');
+        // If offset was reset by backend, reload settings
+        if (response.data.offset_was_reset) {
+          await loadOffsetSettings();
+          showToast(`Full sheet printed! Offset reset for next print.`, 'success');
+        } else {
+          showToast(`PDF ready! ${response.data.labels_count} ${labelType} labels downloading`, 'success');
+        }
+        
         loadQueues(); // Reload queues after printing
         loadRecentPdfs(); // Reload recent PDFs after generating new one
       }
     } catch (error) {
       console.error('Failed to print:', error);
       showToast('Failed to print: ' + (error.response?.data?.error || error.message), 'error');
+    }
+  };
+
+  const handlePrintWithDialog = (labelType) => {
+    const queue = labelType === 'small' ? smallQueue : wideQueue;
+    const isFull = queue.queue_length >= queue.sheet_capacity;
+    
+    if (isFull || queue.queue_length === 0) {
+      // Full sheet or empty - print directly
+      handlePrint(labelType);
+    } else {
+      // Partial sheet - show offset dialog
+      setPendingPrintInfo({ labelType, queue });
+      setShowOffsetDialog(true);
+    }
+  };
+
+  const handleOffsetDialogConfirm = async (autoSetOffset) => {
+    const { labelType, queue } = pendingPrintInfo;
+    
+    setShowOffsetDialog(false);
+    setPendingPrintInfo(null);
+    
+    // Store the labels count BEFORE printing (queue will be cleared after)
+    const labelsJustPrinted = queue.queue_length;
+    
+    // Print first with current settings
+    await handlePrint(labelType);
+    
+    // THEN set the offset for the next print (if user chose auto-set)
+    if (autoSetOffset) {
+      // Small delay to ensure print completed and settings were reloaded if needed
+      await new Promise(resolve => setTimeout(resolve, 200));
+      
+      // Calculate offset based on labels that were just printed
+      const template = labelType === 'small' 
+        ? { rows: 14, columns: 9 }
+        : { rows: 6, columns: 2 };
+      
+      // Calculate which row/column the next label should go
+      const newOffsetRows = Math.floor(labelsJustPrinted / template.columns);
+      const newOffsetColumns = labelsJustPrinted % template.columns;
+      
+      // Save these settings for NEXT print
+      setOffsetSettings(prev => ({
+        ...prev,
+        [labelType]: {
+          rows: String(newOffsetRows),
+          columns: String(newOffsetColumns)
+        }
+      }));
+      
+      try {
+        await axios.put(`${API_URL}/auth/print-settings`, {
+          label_type: labelType,
+          offset_rows: newOffsetRows,
+          offset_columns: newOffsetColumns
+        });
+        showToast(`PDF downloaded! Next print will use offset: row ${newOffsetRows}, col ${newOffsetColumns}`, 'success');
+      } catch (error) {
+        console.error('Failed to auto-set offset:', error);
+        showToast('Failed to save offset for next print', 'error');
+      }
     }
   };
 
@@ -125,6 +254,34 @@ export default function PrintQueueScreen({ navigation }) {
     } catch (error) {
       console.error('Failed to clear queue:', error);
       showToast('Failed to clear queue', 'error');
+    }
+  };
+
+  const handleCreateStockpileSheet = async () => {
+    try {
+      const currentSettings = offsetSettings['small'];
+      const response = await axios.post(`${API_URL}/labels/create-stockpile-sheet`, {
+        offset_rows: parseInt(currentSettings?.rows) || 0,
+        offset_columns: parseInt(currentSettings?.columns) || 0
+      });
+
+      if (response.data.pdf_url) {
+        // Download PDF
+        const fullUrl = `${API_URL}${response.data.pdf_url}`;
+        const link = document.createElement('a');
+        link.href = fullUrl;
+        link.download = response.data.pdf_url.split('/').pop();
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+        showToast(`Stockpile sheet created! ${response.data.items_created} labels ready to print`, 'success');
+        loadQueues();
+        loadRecentPdfs();
+      }
+    } catch (error) {
+      console.error('Failed to create stockpile sheet:', error);
+      showToast('Failed to create stockpile sheet: ' + (error.response?.data?.error || error.message), 'error');
     }
   };
 
@@ -163,7 +320,7 @@ export default function PrintQueueScreen({ navigation }) {
         <View style={styles.actionButtons}>
           <TouchableOpacity
             style={[styles.actionButton, styles.printButton, isEmpty && styles.buttonDisabled]}
-            onPress={() => handlePrint(labelType)}
+            onPress={() => handlePrintWithDialog(labelType)}
             disabled={isEmpty}
           >
             <Ionicons name="print" size={20} color={colors.card} />
@@ -183,70 +340,36 @@ export default function PrintQueueScreen({ navigation }) {
         </View>
 
         {/* Offset Settings for Partial Sheets */}
-        {!isEmpty && (
-          <View style={styles.offsetSection}>
-            <Text style={styles.offsetTitle}>Sheet Offset (for partial sheets):</Text>
-            <View style={styles.offsetInputs}>
-              <View style={styles.offsetInputContainer}>
-                <Text style={styles.offsetLabel}>Rows to skip:</Text>
-                <TextInput
-                  style={styles.offsetInput}
-                  value={offsetRows}
-                  onChangeText={setOffsetRows}
-                  keyboardType="numeric"
-                  placeholder="0"
-                  maxLength={2}
-                />
-              </View>
-              <View style={styles.offsetInputContainer}>
-                <Text style={styles.offsetLabel}>Columns to skip:</Text>
-                <TextInput
-                  style={styles.offsetInput}
-                  value={offsetColumns}
-                  onChangeText={setOffsetColumns}
-                  keyboardType="numeric"
-                  placeholder="0"
-                  maxLength={2}
-                />
-              </View>
+        <View style={styles.offsetSection}>
+          <Text style={styles.offsetTitle}>Sheet Offset (for partial sheets):</Text>
+          <View style={styles.offsetInputs}>
+            <View style={styles.offsetInputContainer}>
+              <Text style={styles.offsetLabel}>Rows to skip:</Text>
+              <TextInput
+                style={styles.offsetInput}
+                value={offsetSettings[labelType]?.rows || '0'}
+                onChangeText={(value) => handleOffsetChange(labelType, 'rows', value)}
+                keyboardType="numeric"
+                placeholder="0"
+                maxLength={2}
+              />
             </View>
-            <Text style={styles.offsetHint}>
-              Use this when reusing a partially used label sheet
-            </Text>
+            <View style={styles.offsetInputContainer}>
+              <Text style={styles.offsetLabel}>Columns to skip:</Text>
+              <TextInput
+                style={styles.offsetInput}
+                value={offsetSettings[labelType]?.columns || '0'}
+                onChangeText={(value) => handleOffsetChange(labelType, 'columns', value)}
+                keyboardType="numeric"
+                placeholder="0"
+                maxLength={2}
+              />
+            </View>
           </View>
-        )}
-
-        {/* Recent PDFs Section */}
-        {recentPdfs.length > 0 && (
-          <View style={styles.recentPdfsSection}>
-            <Text style={styles.recentPdfsTitle}>Recent PDFs:</Text>
-            {recentPdfs.filter(pdf => pdf.label_type === labelType).map((pdf) => (
-              <TouchableOpacity
-                key={pdf.id}
-                style={styles.recentPdfItem}
-                onPress={() => {
-                  const fullUrl = `${API_URL}${pdf.download_url}`;
-                  const link = document.createElement('a');
-                  link.href = fullUrl;
-                  link.download = pdf.filename;
-                  document.body.appendChild(link);
-                  link.click();
-                  document.body.removeChild(link);
-                  showToast('PDF downloading...', 'success');
-                }}
-              >
-                <Ionicons name="document-outline" size={20} color={colors.primary} />
-                <View style={styles.recentPdfInfo}>
-                  <Text style={styles.recentPdfFilename}>{pdf.filename}</Text>
-                  <Text style={styles.recentPdfMeta}>
-                    {pdf.labels_count} {pdf.label_type} labels • {new Date(pdf.created_at).toLocaleDateString()}
-                  </Text>
-                </View>
-                <Ionicons name="download-outline" size={20} color={colors.primary} />
-              </TouchableOpacity>
-            ))}
-          </View>
-        )}
+          <Text style={styles.offsetHint}>
+            Use this when reusing a partially used label sheet
+          </Text>
+        </View>
 
         {/* Queue Items List */}
         {queue.items.length > 0 ? (
@@ -283,6 +406,54 @@ export default function PrintQueueScreen({ navigation }) {
             </Text>
           </View>
         )}
+
+        {/* Recent PDFs Section */}
+        {recentPdfs.length > 0 && (
+          <View style={styles.recentPdfsSection}>
+            <Text style={styles.recentPdfsTitle}>Recent PDFs:</Text>
+            {recentPdfs.filter(pdf => pdf.label_type === labelType).map((pdf) => (
+              <TouchableOpacity
+                key={pdf.id}
+                style={styles.recentPdfItem}
+                onPress={() => {
+                  const fullUrl = `${API_URL}${pdf.download_url}`;
+                  const link = document.createElement('a');
+                  link.href = fullUrl;
+                  link.download = pdf.filename;
+                  document.body.appendChild(link);
+                  link.click();
+                  document.body.removeChild(link);
+                  showToast('PDF downloading...', 'success');
+                }}
+              >
+                <Ionicons name="document-outline" size={20} color={colors.primary} />
+                <View style={styles.recentPdfInfo}>
+                  <Text style={styles.recentPdfFilename}>{pdf.filename}</Text>
+                  <Text style={styles.recentPdfMeta}>
+                    {pdf.labels_count} {pdf.label_type} labels • {new Date(pdf.created_at).toLocaleDateString()}
+                  </Text>
+                </View>
+                <Ionicons name="download-outline" size={20} color={colors.primary} />
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+
+        {/* Stockpile Sheet Button (Small Labels Only) */}
+        {labelType === 'small' && (
+          <View style={styles.stockpileSection}>
+            <TouchableOpacity
+              style={styles.stockpileButton}
+              onPress={handleCreateStockpileSheet}
+            >
+              <Ionicons name="albums-outline" size={20} color={colors.card} />
+              <Text style={styles.stockpileButtonText}>Create Stockpile Sheet</Text>
+            </TouchableOpacity>
+            <Text style={styles.stockpileHint}>
+              Creates pre-printed labels (respects offset) that can be assigned later
+            </Text>
+          </View>
+        )}
       </View>
     );
   };
@@ -307,14 +478,23 @@ export default function PrintQueueScreen({ navigation }) {
         </TouchableOpacity>
       </View>
 
-      {renderQueueSection('Small Labels (20x20mm)', smallQueue, 'small', 'square-outline')}
       {renderQueueSection('Wide Labels (102x48mm)', wideQueue, 'wide', 'rectangle-outline')}
+      {renderQueueSection('Small Labels (20x20mm)', smallQueue, 'small', 'square-outline')}
 
       <Toast
         message={toastMessage}
         type={toastType}
         visible={toastVisible}
         onHide={() => setToastVisible(false)}
+      />
+
+      <ConfirmDialog
+        visible={showOffsetDialog}
+        title="Sheet Reuse"
+        message={`You're printing ${pendingPrintInfo?.queue.queue_length || 0} labels on a partial sheet. Do you want to automatically set the offset assuming you'll reuse this sheet?\n\nThis will position the next print job to continue after these labels.`}
+        confirmText="Auto-Set Offset"
+        onConfirm={() => handleOffsetDialogConfirm(true)}
+        onCancel={() => handleOffsetDialogConfirm(false)}
       />
     </ScrollView>
   );
@@ -568,5 +748,34 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: colors.textSecondary,
     marginTop: 2,
+  },
+  stockpileSection: {
+    marginTop: 16,
+    padding: 12,
+    backgroundColor: colors.background,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  stockpileButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    padding: 14,
+    backgroundColor: colors.primary,
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  stockpileButtonText: {
+    color: colors.card,
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  stockpileHint: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    fontStyle: 'italic',
   },
 });
