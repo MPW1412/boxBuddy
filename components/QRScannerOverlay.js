@@ -138,9 +138,13 @@ export default function QRScannerOverlay({ navigation, onClose }) {
       );
 
       // Check if flash is supported after camera starts
+      // Try multiple times to ensure video element is ready
       setTimeout(() => {
         checkFlashSupport();
       }, 500);
+      setTimeout(() => {
+        checkFlashSupport();
+      }, 1500);
 
       // Apply flash if it was on
       if (isFlashOn) {
@@ -154,10 +158,25 @@ export default function QRScannerOverlay({ navigation, onClose }) {
   const checkFlashSupport = () => {
     try {
       const videoElement = document.getElementById(scannerIdRef.current)?.querySelector('video');
+      console.log('Checking flash support - video element:', !!videoElement);
+      
       if (videoElement && videoElement.srcObject) {
         const track = videoElement.srcObject.getVideoTracks()[0];
-        const capabilities = track.getCapabilities();
-        setFlashSupported(!!capabilities.torch);
+        console.log('Video track found:', !!track);
+        
+        if (track) {
+          const capabilities = track.getCapabilities();
+          console.log('Track capabilities:', capabilities);
+          console.log('Torch capability:', capabilities.torch);
+          
+          const supported = !!capabilities.torch;
+          setFlashSupported(supported);
+          console.log('Flash supported:', supported);
+        }
+      } else {
+        console.warn('Video element or srcObject not ready');
+        // Retry after a longer delay
+        setTimeout(checkFlashSupport, 1000);
       }
     } catch (error) {
       console.error('Error checking flash support:', error);
@@ -341,34 +360,76 @@ export default function QRScannerOverlay({ navigation, onClose }) {
   };
 
   const toggleFlash = async () => {
-    if (!html5QrCodeRef.current) return;
+    if (!html5QrCodeRef.current) {
+      console.error('Scanner not initialized');
+      return;
+    }
 
     const newFlashState = !isFlashOn;
+    console.log('Toggling flash to:', newFlashState);
     setIsFlashOn(newFlashState);
-    applyFlash(html5QrCodeRef.current, newFlashState);
+    await applyFlash(html5QrCodeRef.current, newFlashState);
   };
 
   const applyFlash = async (scanner, enabled) => {
     try {
+      console.log('applyFlash called with enabled:', enabled);
+      
       const videoElement = document.getElementById(scannerIdRef.current)?.querySelector('video');
+      console.log('Video element found:', !!videoElement);
+      
       if (!videoElement || !videoElement.srcObject) {
-        console.error('Video element not found');
+        console.error('Video element or stream not found');
         return;
       }
 
-      const track = videoElement.srcObject.getVideoTracks()[0];
+      const tracks = videoElement.srcObject.getVideoTracks();
+      console.log('Video tracks count:', tracks.length);
+      
+      if (tracks.length === 0) {
+        console.error('No video tracks available');
+        return;
+      }
+
+      const track = tracks[0];
+      console.log('Using track:', track.label);
+      
       const capabilities = track.getCapabilities();
+      console.log('Track capabilities:', JSON.stringify(capabilities, null, 2));
 
       if (capabilities.torch) {
-        await track.applyConstraints({
-          advanced: [{ torch: enabled }]
-        });
-        console.log('Flash', enabled ? 'ON' : 'OFF');
+        console.log('Applying torch constraint:', enabled);
+        
+        try {
+          await track.applyConstraints({
+            advanced: [{ torch: enabled }]
+          });
+          
+          // Verify it was applied
+          const settings = track.getSettings();
+          console.log('Track settings after constraint:', settings);
+          console.log('Torch is now:', settings.torch ? 'ON' : 'OFF');
+          
+        } catch (constraintError) {
+          console.error('Failed to apply constraint:', constraintError);
+          
+          // Try alternative approach
+          console.log('Trying alternative constraint format...');
+          await track.applyConstraints({
+            torch: enabled
+          });
+          console.log('Alternative constraint applied');
+        }
       } else {
-        console.warn('Torch not supported on this device');
+        console.warn('Torch capability not available. Available capabilities:', Object.keys(capabilities));
       }
     } catch (error) {
-      console.error('Flash not supported or failed:', error);
+      console.error('Flash operation failed:', error);
+      console.error('Error details:', {
+        name: error.name,
+        message: error.message,
+        stack: error.stack
+      });
     }
   };
 
