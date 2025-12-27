@@ -3,6 +3,7 @@ import {
   View,
   Text,
   TouchableOpacity,
+  TextInput,
   StyleSheet,
   ScrollView,
   ActivityIndicator,
@@ -22,13 +23,17 @@ const API_URL = Platform.OS === 'web'
 export default function PrintQueueScreen({ navigation }) {
   const [smallQueue, setSmallQueue] = useState({ items: [], queue_length: 0, sheet_capacity: 126 });
   const [wideQueue, setWideQueue] = useState({ items: [], queue_length: 0, sheet_capacity: 12 });
+  const [recentPdfs, setRecentPdfs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [toastVisible, setToastVisible] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
   const [toastType, setToastType] = useState('success');
+  const [offsetRows, setOffsetRows] = useState('0');
+  const [offsetColumns, setOffsetColumns] = useState('0');
 
   useEffect(() => {
     loadQueues();
+    loadRecentPdfs();
   }, []);
 
   const showToast = (message, type = 'success') => {
@@ -55,6 +60,16 @@ export default function PrintQueueScreen({ navigation }) {
     }
   };
 
+  const loadRecentPdfs = async () => {
+    try {
+      const response = await axios.get(`${API_URL}/labels/recent-pdfs`);
+      setRecentPdfs(response.data);
+    } catch (error) {
+      console.error('Failed to load recent PDFs:', error);
+      // Don't show error toast for this, it's not critical
+    }
+  };
+
   const handlePrint = async (labelType) => {
     const queue = labelType === 'small' ? smallQueue : wideQueue;
     
@@ -66,7 +81,9 @@ export default function PrintQueueScreen({ navigation }) {
     try {
       const response = await axios.post(`${API_URL}/labels/print`, {
         label_type: labelType,
-        fill_remaining: false
+        fill_remaining: false,
+        offset_rows: parseInt(offsetRows) || 0,
+        offset_columns: parseInt(offsetColumns) || 0
       });
 
       if (response.data.pdf_url) {
@@ -81,6 +98,7 @@ export default function PrintQueueScreen({ navigation }) {
 
         showToast(`PDF ready! ${response.data.labels_count} ${labelType} labels downloading`, 'success');
         loadQueues(); // Reload queues after printing
+        loadRecentPdfs(); // Reload recent PDFs after generating new one
       }
     } catch (error) {
       console.error('Failed to print:', error);
@@ -163,6 +181,72 @@ export default function PrintQueueScreen({ navigation }) {
             <Text style={[styles.actionButtonText, styles.clearButtonText]}>Clear All</Text>
           </TouchableOpacity>
         </View>
+
+        {/* Offset Settings for Partial Sheets */}
+        {!isEmpty && (
+          <View style={styles.offsetSection}>
+            <Text style={styles.offsetTitle}>Sheet Offset (for partial sheets):</Text>
+            <View style={styles.offsetInputs}>
+              <View style={styles.offsetInputContainer}>
+                <Text style={styles.offsetLabel}>Rows to skip:</Text>
+                <TextInput
+                  style={styles.offsetInput}
+                  value={offsetRows}
+                  onChangeText={setOffsetRows}
+                  keyboardType="numeric"
+                  placeholder="0"
+                  maxLength={2}
+                />
+              </View>
+              <View style={styles.offsetInputContainer}>
+                <Text style={styles.offsetLabel}>Columns to skip:</Text>
+                <TextInput
+                  style={styles.offsetInput}
+                  value={offsetColumns}
+                  onChangeText={setOffsetColumns}
+                  keyboardType="numeric"
+                  placeholder="0"
+                  maxLength={2}
+                />
+              </View>
+            </View>
+            <Text style={styles.offsetHint}>
+              Use this when reusing a partially used label sheet
+            </Text>
+          </View>
+        )}
+
+        {/* Recent PDFs Section */}
+        {recentPdfs.length > 0 && (
+          <View style={styles.recentPdfsSection}>
+            <Text style={styles.recentPdfsTitle}>Recent PDFs:</Text>
+            {recentPdfs.filter(pdf => pdf.label_type === labelType).map((pdf) => (
+              <TouchableOpacity
+                key={pdf.id}
+                style={styles.recentPdfItem}
+                onPress={() => {
+                  const fullUrl = `${API_URL}${pdf.download_url}`;
+                  const link = document.createElement('a');
+                  link.href = fullUrl;
+                  link.download = pdf.filename;
+                  document.body.appendChild(link);
+                  link.click();
+                  document.body.removeChild(link);
+                  showToast('PDF downloading...', 'success');
+                }}
+              >
+                <Ionicons name="document-outline" size={20} color={colors.primary} />
+                <View style={styles.recentPdfInfo}>
+                  <Text style={styles.recentPdfFilename}>{pdf.filename}</Text>
+                  <Text style={styles.recentPdfMeta}>
+                    {pdf.labels_count} {pdf.label_type} labels • {new Date(pdf.created_at).toLocaleDateString()}
+                  </Text>
+                </View>
+                <Ionicons name="download-outline" size={20} color={colors.primary} />
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
 
         {/* Queue Items List */}
         {queue.items.length > 0 ? (
@@ -403,5 +487,86 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     marginTop: 4,
     textAlign: 'center',
+  },
+  offsetSection: {
+    marginTop: 16,
+    padding: 12,
+    backgroundColor: colors.background,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  offsetTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.text,
+    marginBottom: 8,
+  },
+  offsetInputs: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  offsetInputContainer: {
+    flex: 1,
+    marginHorizontal: 4,
+  },
+  offsetLabel: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginBottom: 4,
+  },
+  offsetInput: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 4,
+    padding: 8,
+    fontSize: 14,
+    color: colors.text,
+    backgroundColor: colors.card,
+    textAlign: 'center',
+  },
+  offsetHint: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginTop: 6,
+    fontStyle: 'italic',
+  },
+  recentPdfsSection: {
+    marginTop: 16,
+    padding: 12,
+    backgroundColor: colors.background,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  recentPdfsTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.text,
+    marginBottom: 8,
+  },
+  recentPdfItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 8,
+    backgroundColor: colors.card,
+    borderRadius: 4,
+    marginBottom: 6,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  recentPdfInfo: {
+    flex: 1,
+    marginLeft: 8,
+  },
+  recentPdfFilename: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: colors.text,
+  },
+  recentPdfMeta: {
+    fontSize: 11,
+    color: colors.textSecondary,
+    marginTop: 2,
   },
 });
