@@ -112,8 +112,20 @@ export default function ItemDetailScreen({ route, navigation }) {
       });
       
       if (response.data.auto_print_triggered) {
-        // Sheet is full - PDF generated
-        showToast(`Sheet complete! ${response.data.labels_printed} labels ready. Go to Print Queue to download.`, 'success');
+        // Sheet is full - PDF generated, download it automatically
+        if (response.data.pdf_url) {
+          const fullUrl = `${API_URL}${response.data.pdf_url}`;
+          const link = document.createElement('a');
+          link.href = fullUrl;
+          link.download = response.data.pdf_url.split('/').pop();
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+
+          showToast(`Sheet complete! ${response.data.labels_printed} labels downloading...`, 'success');
+        } else {
+          showToast(`Sheet complete! ${response.data.labels_printed} labels ready. Go to Print Queue to download.`, 'success');
+        }
       } else {
         // Sheet not full yet
         showToast(`Label queued (${response.data.queue_length}/${response.data.sheet_capacity})`, 'success');
