@@ -16,6 +16,7 @@ export default function QRScannerOverlay({ navigation, onClose }) {
   const [cameras, setCameras] = useState([]);
   const [currentCameraIndex, setCurrentCameraIndex] = useState(0);
   const [isFlashOn, setIsFlashOn] = useState(false);
+  const [flashSupported, setFlashSupported] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [lastScanTime, setLastScanTime] = useState(Date.now());
   const [scanFlash, setScanFlash] = useState(false);
@@ -37,16 +38,34 @@ export default function QRScannerOverlay({ navigation, onClose }) {
     const initScanner = async () => {
       try {
         // Get available cameras
-        const devices = await Html5Qrcode.getCameras();
-        if (devices && devices.length > 0) {
-          setCameras(devices);
+        const allDevices = await Html5Qrcode.getCameras();
+        if (allDevices && allDevices.length > 0) {
+          // Filter to prefer rear/environment cameras
+          // Look for keywords: "back", "rear", "environment", "facing back"
+          const rearCameras = allDevices.filter(device => {
+            const label = device.label.toLowerCase();
+            return label.includes('back') || 
+                   label.includes('rear') || 
+                   label.includes('environment') ||
+                   label.includes('facing back') ||
+                   label.includes('후면') || // Korean for back
+                   label.includes('trasera'); // Spanish for rear
+          });
+
+          // Use rear cameras if available, otherwise use all
+          const camerasToUse = rearCameras.length > 0 ? rearCameras : allDevices;
+          
+          console.log('All cameras:', allDevices.map(d => d.label));
+          console.log('Filtered cameras:', camerasToUse.map(d => d.label));
+          
+          setCameras(camerasToUse);
           
           // Initialize scanner
           const scanner = new Html5Qrcode(scannerIdRef.current);
           html5QrCodeRef.current = scanner;
 
           // Start scanning with first camera
-          await startScanning(scanner, devices[0].id);
+          await startScanning(scanner, camerasToUse[0].id);
           setScanning(true);
         }
       } catch (error) {
@@ -86,10 +105,28 @@ export default function QRScannerOverlay({ navigation, onClose }) {
   }, [lastScanTime]);
 
   const startScanning = async (scanner, cameraId) => {
+    // Larger qrbox for better long-distance scanning
+    // Use percentage of viewport for responsive sizing
     const config = { 
       fps: 10,
-      qrbox: { width: 250, height: 250 },
-      aspectRatio: 1.0
+      qrbox: function(viewfinderWidth, viewfinderHeight) {
+        // Use 90% of smaller dimension for maximum scan area
+        const minEdgeSize = Math.min(viewfinderWidth, viewfinderHeight);
+        const qrboxSize = Math.floor(minEdgeSize * 0.9);
+        return {
+          width: qrboxSize,
+          height: qrboxSize
+        };
+      },
+      aspectRatio: 1.0,
+      // Higher resolution for better far-distance recognition
+      videoConstraints: {
+        facingMode: "environment",
+        advanced: [
+          { focusMode: "continuous" },
+          { zoom: 1.0 }
+        ]
+      }
     };
 
     try {
@@ -100,12 +137,31 @@ export default function QRScannerOverlay({ navigation, onClose }) {
         onScanError
       );
 
+      // Check if flash is supported after camera starts
+      setTimeout(() => {
+        checkFlashSupport();
+      }, 500);
+
       // Apply flash if it was on
       if (isFlashOn) {
         applyFlash(scanner, true);
       }
     } catch (error) {
       console.error('Failed to start scanning:', error);
+    }
+  };
+
+  const checkFlashSupport = () => {
+    try {
+      const videoElement = document.getElementById(scannerIdRef.current)?.querySelector('video');
+      if (videoElement && videoElement.srcObject) {
+        const track = videoElement.srcObject.getVideoTracks()[0];
+        const capabilities = track.getCapabilities();
+        setFlashSupported(!!capabilities.torch);
+      }
+    } catch (error) {
+      console.error('Error checking flash support:', error);
+      setFlashSupported(false);
     }
   };
 
@@ -217,25 +273,33 @@ export default function QRScannerOverlay({ navigation, onClose }) {
     try {
       const uuid = extractUuidFromQr(qrCode);
       
+      console.log('Place-in mode - Scanned UUID:', uuid, 'Waiting for container:', waitingForContainer);
+      
       if (!waitingForContainer) {
         // First scan - this is the item
-        const response = await axios.get(`${API_URL}/items/${uuid}`);
-        setScannedItem(response.data);
-        setWaitingForContainer(true);
+        try {
+          const response = await axios.get(`${API_URL}/items/${uuid}`);
+          console.log('Item scanned:', response.data.name);
+          setScannedItem(response.data);
+          setWaitingForContainer(true);
+        } catch (error) {
+          console.error('Item not found:', error);
+          // Item doesn't exist, skip
+        }
       } else {
         // Second scan - this is the container
         const containerUuid = uuid;
         
-        // Move item to container
-        await axios.put(`${API_URL}/items/${scannedItem.uuid}`, {
-          locationEntityUUID: containerUuid
-        });
+        console.log('Container scanned, moving item:', scannedItem.uuid, 'to container:', containerUuid);
+        
+        // Use the store endpoint (same as drag-and-drop)
+        await axios.post(`${API_URL}/items/${scannedItem.uuid}/store/${containerUuid}`);
+        
+        console.log('Item successfully moved!');
 
         // Reset for next item-container pair
         setScannedItem(null);
         setWaitingForContainer(false);
-
-        // Could show success feedback here
       }
     } catch (error) {
       console.error('Error in place-in mode:', error);
@@ -286,11 +350,22 @@ export default function QRScannerOverlay({ navigation, onClose }) {
 
   const applyFlash = async (scanner, enabled) => {
     try {
-      const track = scanner.getRunningTrackCameraCapabilities();
-      if (track && track.torch) {
+      const videoElement = document.getElementById(scannerIdRef.current)?.querySelector('video');
+      if (!videoElement || !videoElement.srcObject) {
+        console.error('Video element not found');
+        return;
+      }
+
+      const track = videoElement.srcObject.getVideoTracks()[0];
+      const capabilities = track.getCapabilities();
+
+      if (capabilities.torch) {
         await track.applyConstraints({
           advanced: [{ torch: enabled }]
         });
+        console.log('Flash', enabled ? 'ON' : 'OFF');
+      } else {
+        console.warn('Torch not supported on this device');
       }
     } catch (error) {
       console.error('Flash not supported or failed:', error);
@@ -322,14 +397,16 @@ export default function QRScannerOverlay({ navigation, onClose }) {
           </TouchableOpacity>
         )}
         
-        <TouchableOpacity style={styles.controlButton} onPress={toggleFlash}>
-          <Ionicons 
-            name={isFlashOn ? "flash" : "flash-outline"} 
-            size={20} 
-            color={isFlashOn ? colors.warning : colors.card} 
-          />
-          <Text style={styles.controlText}>Flash</Text>
-        </TouchableOpacity>
+        {flashSupported && (
+          <TouchableOpacity style={styles.controlButton} onPress={toggleFlash}>
+            <Ionicons 
+              name={isFlashOn ? "flash" : "flash-outline"} 
+              size={20} 
+              color={isFlashOn ? colors.warning : colors.card} 
+            />
+            <Text style={styles.controlText}>Flash</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* Mode selector */}
@@ -375,10 +452,12 @@ const styles = StyleSheet.create({
   container: {
     position: 'fixed',
     bottom: 0,
-    right: 0,
+    right: Platform.OS === 'web' ? (typeof window !== 'undefined' && window.innerWidth > 768 ? 0 : 80) : 0,
+    left: Platform.OS === 'web' ? (typeof window !== 'undefined' && window.innerWidth > 768 ? 'auto' : 80) : 'auto',
     height: '33.33vh',
-    minWidth: 300,
-    maxWidth: 400,
+    width: Platform.OS === 'web' ? (typeof window !== 'undefined' && window.innerWidth > 768 ? 400 : 'auto') : 'auto',
+    minWidth: Platform.OS === 'web' ? (typeof window !== 'undefined' && window.innerWidth > 768 ? 300 : 'auto') : 'auto',
+    maxWidth: Platform.OS === 'web' ? (typeof window !== 'undefined' && window.innerWidth > 768 ? 400 : 'none') : 'none',
     backgroundColor: colors.surface,
     borderTopLeftRadius: 12,
     borderWidth: 2,

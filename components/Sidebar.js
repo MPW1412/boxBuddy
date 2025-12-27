@@ -237,9 +237,9 @@ export default function Sidebar({ navigation, pinnedContainers = [], onRemovePin
           onPress={onToggleScanner}
         >
           <Ionicons 
-            name={scannerEnabled ? "qr-code" : "qr-code-outline"} 
+            name="qr-code-outline"
             size={40} 
-            color={scannerEnabled ? colors.success : colors.card} 
+            color={colors.card} 
           />
         </TouchableOpacity>
         <TouchableOpacity 
