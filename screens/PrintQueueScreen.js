@@ -21,7 +21,7 @@ const API_URL = Platform.OS === 'web'
 
 export default function PrintQueueScreen({ navigation }) {
   const [smallQueue, setSmallQueue] = useState({ items: [], queue_length: 0, sheet_capacity: 126 });
-  const [wideQueue, setWideQueue] = useState({ items: [], queue_length: 0, sheet_capacity: 8 });
+  const [wideQueue, setWideQueue] = useState({ items: [], queue_length: 0, sheet_capacity: 12 });
   const [loading, setLoading] = useState(true);
   const [toastVisible, setToastVisible] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
@@ -224,7 +224,7 @@ export default function PrintQueueScreen({ navigation }) {
       </View>
 
       {renderQueueSection('Small Labels (20x20mm)', smallQueue, 'small', 'square-outline')}
-      {renderQueueSection('Wide Labels (105x74mm)', wideQueue, 'wide', 'rectangle-outline')}
+      {renderQueueSection('Wide Labels (102x48mm)', wideQueue, 'wide', 'rectangle-outline')}
 
       <Toast
         message={toastMessage}
