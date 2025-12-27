@@ -28,6 +28,7 @@ export default function QRScannerOverlay({ navigation, onClose }) {
   const scannerIdRef = useRef('qr-scanner-' + Date.now());
   const inactivityTimerRef = useRef(null);
   const audioContextRef = useRef(null);
+  const cooldownCodesRef = useRef(new Map()); // Track codes with cooldown
 
   // Initialize scanner
   useEffect(() => {
@@ -109,7 +110,26 @@ export default function QRScannerOverlay({ navigation, onClose }) {
   };
 
   const onScanSuccess = async (decodedText, decodedResult) => {
-    setLastScanTime(Date.now());
+    // Check if this code is on cooldown
+    const now = Date.now();
+    const cooldownUntil = cooldownCodesRef.current.get(decodedText);
+    
+    if (cooldownUntil && now < cooldownUntil) {
+      // Code is on cooldown - silently ignore
+      return;
+    }
+    
+    setLastScanTime(now);
+    
+    // Add 5-second cooldown for this code
+    cooldownCodesRef.current.set(decodedText, now + 5000);
+    
+    // Clean up old cooldowns (older than 10 seconds)
+    for (const [code, expiry] of cooldownCodesRef.current.entries()) {
+      if (now > expiry + 5000) {
+        cooldownCodesRef.current.delete(code);
+      }
+    }
     
     // Visual and audio feedback
     triggerScanFeedback();
@@ -168,12 +188,25 @@ export default function QRScannerOverlay({ navigation, onClose }) {
       // Extract UUID from QR code (format: c0h.de/{uuid}?c={imhCode})
       const uuid = extractUuidFromQr(qrCode);
       
+      console.log('View mode - QR code:', qrCode, 'Extracted UUID:', uuid);
+      
       if (uuid) {
-        // Navigate to item details
-        navigation.navigate('ItemDetails', { uuid });
+        // First check if item exists in database
+        try {
+          const response = await axios.get(`${API_URL}/items/${uuid}`);
+          console.log('Item found:', response.data);
+          
+          // Navigate to item details (correct screen name)
+          navigation.navigate('Item Detail', { uuid });
+        } catch (error) {
+          console.error('Item not found, creating new:', error);
+          // If not found, create new item with this UUID
+          navigation.navigate('Create Item', { uuid: qrCode });
+        }
       } else {
+        console.log('No valid UUID, creating new item');
         // If not our QR format, try creating new item with this UUID
-        navigation.navigate('CreateItem', { uuid: qrCode });
+        navigation.navigate('Create Item', { uuid: qrCode });
       }
     } catch (error) {
       console.error('Error in view mode:', error);
