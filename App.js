@@ -10,6 +10,7 @@ import LoginScreen from './screens/LoginScreen';
 import UserSettingsScreen from './screens/UserSettingsScreen';
 import PrintQueueScreen from './screens/PrintQueueScreen';
 import Sidebar from './components/Sidebar';
+import QRScannerOverlay from './components/QRScannerOverlay';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import colors from './constants/colors';
 import axios from 'axios';
@@ -53,6 +54,7 @@ function AppNavigator() {
   const listItemsRef = useRef();
   const [navigation, setNavigation] = useState(null);
   const [pinnedContainers, setPinnedContainers] = useState([]);
+  const [scannerEnabled, setScannerEnabled] = useState(false);
   const { user, loading } = useAuth();
 
   // Load pinned containers when user logs in
@@ -109,6 +111,10 @@ function AppNavigator() {
     }
   };
 
+  const toggleScanner = () => {
+    setScannerEnabled(!scannerEnabled);
+  };
+
   if (loading) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background }}>
@@ -142,6 +148,8 @@ function AppNavigator() {
           onRemovePinned={removePinnedContainer}
           onPinContainer={addPinnedContainer}
           onItemMoved={handleItemMoved}
+          onToggleScanner={toggleScanner}
+          scannerEnabled={scannerEnabled}
         />
         <View style={{ flex: 1 }}>
           <Stack.Navigator initialRouteName="List Items" screenOptions={{ headerShown: false }}>
@@ -155,6 +163,14 @@ function AppNavigator() {
             <Stack.Screen name="User Settings" component={UserSettingsScreen} />
             <Stack.Screen name="Print Queue" component={PrintQueueScreen} />
           </Stack.Navigator>
+          
+          {/* QR Scanner Overlay - shows on top of everything when enabled */}
+          {scannerEnabled && Platform.OS === 'web' && (
+            <QRScannerOverlay 
+              navigation={navigation} 
+              onClose={toggleScanner}
+            />
+          )}
         </View>
       </View>
     </NavigationContainer>

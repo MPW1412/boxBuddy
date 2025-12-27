@@ -29,7 +29,7 @@ const breakIntoLines = (text, maxCharsPerLine = 6) => {
   return lines.slice(0, 3); // Max 3 lines
 };
 
-export default function Sidebar({ navigation, pinnedContainers = [], onRemovePinned, onPinContainer, onItemMoved }) {
+export default function Sidebar({ navigation, pinnedContainers = [], onRemovePinned, onPinContainer, onItemMoved, onToggleScanner, scannerEnabled }) {
   const [dragOverContainer, setDragOverContainer] = useState(null);
   const [dragOverPinZone, setDragOverPinZone] = useState(false);
 
@@ -230,8 +230,18 @@ export default function Sidebar({ navigation, pinnedContainers = [], onRemovePin
       )}
       </View>
       
-      {/* Print Queue and User icons at bottom */}
+      {/* Scanner, Print Queue and User icons at bottom */}
       <View style={styles.bottomSection}>
+        <TouchableOpacity 
+          style={[styles.scannerButton, scannerEnabled && styles.scannerButtonActive]} 
+          onPress={onToggleScanner}
+        >
+          <Ionicons 
+            name={scannerEnabled ? "qr-code" : "qr-code-outline"} 
+            size={40} 
+            color={scannerEnabled ? colors.success : colors.card} 
+          />
+        </TouchableOpacity>
         <TouchableOpacity 
           style={styles.printQueueButton} 
           onPress={() => navigation && navigation.navigate('Print Queue')}
@@ -266,6 +276,17 @@ const styles = StyleSheet.create({
   },
   bottomSection: {
     paddingBottom: 10,
+  },
+  scannerButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 10,
+    marginVertical: 3,
+    backgroundColor: '#666666',
+    borderRadius: 8,
+  },
+  scannerButtonActive: {
+    backgroundColor: colors.success,
   },
   printQueueButton: {
     alignItems: 'center',
