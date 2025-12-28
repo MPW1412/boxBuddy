@@ -15,14 +15,11 @@ export default function QRScannerOverlay({ navigation, onClose }) {
   const [mode, setMode] = useState('view'); // 'view' or 'place-in'
   const [cameras, setCameras] = useState([]);
   const [currentCameraIndex, setCurrentCameraIndex] = useState(0);
-  const [isFlashOn, setIsFlashOn] = useState(false);
-  const [flashSupported, setFlashSupported] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [lastScanTime, setLastScanTime] = useState(Date.now());
   const [scanFlash, setScanFlash] = useState(false);
   
   // Place-in mode state
-  const [waitingForContainer, setWaitingForContainer] = useState(false);
   const [scannedItem, setScannedItem] = useState(null);
 
   const html5QrCodeRef = useRef(null);
@@ -30,6 +27,8 @@ export default function QRScannerOverlay({ navigation, onClose }) {
   const inactivityTimerRef = useRef(null);
   const audioContextRef = useRef(null);
   const cooldownCodesRef = useRef(new Map()); // Track codes with cooldown
+  const modeRef = useRef('view'); // Track current mode for callbacks
+  const scannedItemRef = useRef(null); // Track scanned item for callbacks
 
   // Initialize scanner
   useEffect(() => {
@@ -38,34 +37,28 @@ export default function QRScannerOverlay({ navigation, onClose }) {
     const initScanner = async () => {
       try {
         // Get available cameras
-        const allDevices = await Html5Qrcode.getCameras();
-        if (allDevices && allDevices.length > 0) {
-          // Filter to prefer rear/environment cameras
-          // Look for keywords: "back", "rear", "environment", "facing back"
-          const rearCameras = allDevices.filter(device => {
-            const label = device.label.toLowerCase();
-            return label.includes('back') || 
-                   label.includes('rear') || 
-                   label.includes('environment') ||
-                   label.includes('facing back') ||
-                   label.includes('후면') || // Korean for back
-                   label.includes('trasera'); // Spanish for rear
-          });
-
-          // Use rear cameras if available, otherwise use all
-          const camerasToUse = rearCameras.length > 0 ? rearCameras : allDevices;
-          
-          console.log('All cameras:', allDevices.map(d => d.label));
-          console.log('Filtered cameras:', camerasToUse.map(d => d.label));
-          
-          setCameras(camerasToUse);
+        const devices = await Html5Qrcode.getCameras();
+        if (devices && devices.length > 0) {
+          setCameras(devices);
           
           // Initialize scanner
           const scanner = new Html5Qrcode(scannerIdRef.current);
           html5QrCodeRef.current = scanner;
 
-          // Start scanning with first camera
-          await startScanning(scanner, camerasToUse[0].id);
+          // Try to restore last used camera from localStorage
+          let cameraIndexToUse = 0;
+          const savedCameraId = localStorage.getItem('qrScannerLastCameraId');
+          
+          if (savedCameraId) {
+            const savedIndex = devices.findIndex(d => d.id === savedCameraId);
+            if (savedIndex !== -1) {
+              cameraIndexToUse = savedIndex;
+              console.log('Restored last used camera:', devices[savedIndex].label);
+            }
+          }
+          
+          setCurrentCameraIndex(cameraIndexToUse);
+          await startScanning(scanner, devices[cameraIndexToUse].id);
           setScanning(true);
         }
       } catch (error) {
@@ -105,92 +98,37 @@ export default function QRScannerOverlay({ navigation, onClose }) {
   }, [lastScanTime]);
 
   const startScanning = async (scanner, cameraId) => {
-    // Larger qrbox for better long-distance scanning
-    // Use percentage of viewport for responsive sizing
-    const config = { 
+    const config = {
       fps: 10,
-      qrbox: function(viewfinderWidth, viewfinderHeight) {
-        // Use 90% of smaller dimension for maximum scan area
-        const minEdgeSize = Math.min(viewfinderWidth, viewfinderHeight);
-        const qrboxSize = Math.floor(minEdgeSize * 0.9);
-        return {
-          width: qrboxSize,
-          height: qrboxSize
-        };
-      },
-      aspectRatio: 1.0,
-      // Higher resolution for better far-distance recognition
-      videoConstraints: {
-        facingMode: "environment",
-        advanced: [
-          { focusMode: "continuous" },
-          { zoom: 1.0 }
-        ]
-      }
+      qrbox: { width: 250, height: 250 },
+      aspectRatio: 1.0
     };
 
     try {
-      await scanner.start(
-        cameraId,
-        config,
-        onScanSuccess,
-        onScanError
-      );
-
-      // Check if flash is supported after camera starts
-      // Try multiple times to ensure video element is ready
-      setTimeout(() => {
-        checkFlashSupport();
-      }, 500);
-      setTimeout(() => {
-        checkFlashSupport();
-      }, 1500);
-
-      // Apply flash if it was on
-      if (isFlashOn) {
-        applyFlash(scanner, true);
-      }
+       await scanner.start(
+         cameraId,
+         config,
+         onScanSuccess,
+         onScanError
+       );
     } catch (error) {
       console.error('Failed to start scanning:', error);
     }
   };
 
-  const checkFlashSupport = () => {
-    try {
-      const videoElement = document.getElementById(scannerIdRef.current)?.querySelector('video');
-      console.log('Checking flash support - video element:', !!videoElement);
-      
-      if (videoElement && videoElement.srcObject) {
-        const track = videoElement.srcObject.getVideoTracks()[0];
-        console.log('Video track found:', !!track);
-        
-        if (track) {
-          const capabilities = track.getCapabilities();
-          console.log('Track capabilities:', capabilities);
-          console.log('Torch capability:', capabilities.torch);
-          
-          const supported = !!capabilities.torch;
-          setFlashSupported(supported);
-          console.log('Flash supported:', supported);
-        }
-      } else {
-        console.warn('Video element or srcObject not ready');
-        // Retry after a longer delay
-        setTimeout(checkFlashSupport, 1000);
-      }
-    } catch (error) {
-      console.error('Error checking flash support:', error);
-      setFlashSupported(false);
-    }
-  };
-
   const onScanSuccess = async (decodedText, decodedResult) => {
+    console.log('=== QR SCAN SUCCESS ===');
+    console.log('Scanned text:', decodedText);
+    console.log('Current mode (state):', mode);
+    console.log('Current mode (ref):', modeRef.current);
+    
     // Check if this code is on cooldown
     const now = Date.now();
     const cooldownUntil = cooldownCodesRef.current.get(decodedText);
     
     if (cooldownUntil && now < cooldownUntil) {
       // Code is on cooldown - silently ignore
+      console.log('⏱️ Code on cooldown, ignoring. Cooldown until:', new Date(cooldownUntil));
       return;
     }
     
@@ -198,6 +136,7 @@ export default function QRScannerOverlay({ navigation, onClose }) {
     
     // Add 5-second cooldown for this code
     cooldownCodesRef.current.set(decodedText, now + 5000);
+    console.log('✓ Added 5-second cooldown for this code');
     
     // Clean up old cooldowns (older than 10 seconds)
     for (const [code, expiry] of cooldownCodesRef.current.entries()) {
@@ -209,12 +148,15 @@ export default function QRScannerOverlay({ navigation, onClose }) {
     // Visual and audio feedback
     triggerScanFeedback();
 
-    // Process scanned code based on mode
-    if (mode === 'view') {
+    // Process scanned code based on mode (use ref for current value)
+    const currentMode = modeRef.current;
+    console.log('Processing in mode:', currentMode);
+    if (currentMode === 'view') {
       await handleViewMode(decodedText);
     } else {
       await handlePlaceInMode(decodedText);
     }
+    console.log('=== END QR SCAN ===');
   };
 
   const onScanError = (error) => {
@@ -258,6 +200,36 @@ export default function QRScannerOverlay({ navigation, onClose }) {
     }
   };
 
+  const playPlacementSound = () => {
+    if (Platform.OS !== 'web') return;
+
+    try {
+      if (!audioContextRef.current) {
+        audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
+      }
+
+      const context = audioContextRef.current;
+      const oscillator = context.createOscillator();
+      const gainNode = context.createGain();
+
+      oscillator.connect(gainNode);
+      gainNode.connect(context.destination);
+
+      // Create a descending tone that sounds like dropping/placing
+      oscillator.frequency.setValueAtTime(600, context.currentTime);
+      oscillator.frequency.exponentialRampToValueAtTime(200, context.currentTime + 0.15);
+      oscillator.type = 'sine';
+
+      gainNode.gain.setValueAtTime(0.4, context.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, context.currentTime + 0.15);
+
+      oscillator.start(context.currentTime);
+      oscillator.stop(context.currentTime + 0.15);
+    } catch (error) {
+      console.error('Failed to play placement sound:', error);
+    }
+  };
+
   const handleViewMode = async (qrCode) => {
     try {
       // Extract UUID from QR code (format: c0h.de/{uuid}?c={imhCode})
@@ -271,17 +243,19 @@ export default function QRScannerOverlay({ navigation, onClose }) {
           const response = await axios.get(`${API_URL}/items/${uuid}`);
           console.log('Item found:', response.data);
           
-          // Navigate to item details (correct screen name)
+          // Navigate to item details
           navigation.navigate('Item Detail', { uuid });
         } catch (error) {
-          console.error('Item not found, creating new:', error);
-          // If not found, create new item with this UUID
-          navigation.navigate('Create Item', { uuid: qrCode });
+          if (error.response && error.response.status === 404) {
+            console.log('Item not found (404), navigating to Create Item with UUID:', uuid);
+            // Item doesn't exist - navigate to Create Item with the UUID pre-filled
+            navigation.navigate('Create Item', { uuid: uuid });
+          } else {
+            console.error('Error fetching item:', error);
+          }
         }
       } else {
-        console.log('No valid UUID, creating new item');
-        // If not our QR format, try creating new item with this UUID
-        navigation.navigate('Create Item', { uuid: qrCode });
+        console.log('Invalid QR code format, ignoring');
       }
     } catch (error) {
       console.error('Error in view mode:', error);
@@ -289,42 +263,82 @@ export default function QRScannerOverlay({ navigation, onClose }) {
   };
 
   const handlePlaceInMode = async (qrCode) => {
+    console.log('🔵 handlePlaceInMode CALLED');
+    console.log('🔵 QR Code:', qrCode);
+    console.log('🔵 Current scannedItem (state):', scannedItem ? `${scannedItem.name} (${scannedItem.uuid})` : 'null');
+    console.log('🔵 Current scannedItem (ref):', scannedItemRef.current ? `${scannedItemRef.current.name} (${scannedItemRef.current.uuid})` : 'null');
+    
     try {
       const uuid = extractUuidFromQr(qrCode);
+      console.log('🔵 Extracted UUID:', uuid);
       
-      console.log('Place-in mode - Scanned UUID:', uuid, 'Waiting for container:', waitingForContainer);
+      if (!uuid) {
+        console.log('❌ Place-In: Invalid QR code format, ignoring');
+        return;
+      }
       
-      if (!waitingForContainer) {
-        // First scan - this is the item
-        try {
-          const response = await axios.get(`${API_URL}/items/${uuid}`);
-          console.log('Item scanned:', response.data.name);
-          setScannedItem(response.data);
-          setWaitingForContainer(true);
-        } catch (error) {
-          console.error('Item not found:', error);
-          // Item doesn't exist, skip
-        }
+      // Fetch the scanned item details
+      console.log('🔵 Fetching item from API:', `${API_URL}/items/${uuid}`);
+      const response = await axios.get(`${API_URL}/items/${uuid}`);
+      const scannedData = response.data;
+      console.log('✅ Place-In: Fetched item data:', scannedData);
+      
+      // Use ref for current value
+      const currentItem = scannedItemRef.current;
+      
+      if (!currentItem) {
+        // First scan - store this item
+        console.log('🟢 FIRST SCAN - Selecting item:', scannedData.name, '(UUID:', scannedData.uuid, ')');
+        setScannedItem(scannedData);
+        scannedItemRef.current = scannedData; // Update ref immediately
       } else {
-        // Second scan - this is the container
-        const containerUuid = uuid;
+        console.log('🟡 SECOND SCAN - Current item:', currentItem.name, '-> Newly scanned:', scannedData.name);
+        console.log('🟡 Is newly scanned item nestable?', scannedData.nestable);
         
-        console.log('Container scanned, moving item:', scannedItem.uuid, 'to container:', containerUuid);
-        
-        // Use the store endpoint (same as drag-and-drop)
-        await axios.post(`${API_URL}/items/${scannedItem.uuid}/store/${containerUuid}`);
-        
-        console.log('Item successfully moved!');
-
-        // Reset for next item-container pair
-        setScannedItem(null);
-        setWaitingForContainer(false);
+        // We have an item already - determine action based on whether 
+        // the newly scanned item is a container
+        if (scannedData.nestable) {
+          // Scanned item is a container - place current item into it
+          console.log('🚀 PLACING ITEM IN CONTAINER');
+          console.log('   Item:', currentItem.name, '(', currentItem.uuid, ')');
+          console.log('   Container:', scannedData.name, '(', scannedData.uuid, ')');
+          console.log('   API URL:', `${API_URL}/items/${currentItem.uuid}/store/${scannedData.uuid}`);
+          
+          const updateResponse = await axios.post(`${API_URL}/items/${currentItem.uuid}/store/${scannedData.uuid}`);
+          console.log('✅ Place-In: API SUCCESS! Response:', updateResponse.data);
+          
+          // Play placement success sound
+          playPlacementSound();
+          
+          // Navigate to container detail view so user can verify the placement
+          console.log('📱 Navigating to container detail view:', scannedData.uuid);
+          navigation.navigate('Item Detail', { uuid: scannedData.uuid });
+          
+          // Now the container becomes the new current item
+          // (so we can chain: place container into another container)
+          setScannedItem(scannedData);
+          scannedItemRef.current = scannedData; // Update ref immediately
+          console.log('🔄 Container', scannedData.name, 'is now the active item for next placement');
+        } else {
+          // Scanned item is NOT a container - replace current item
+          console.log('🔄 Not a container, replacing', currentItem.name, 'with', scannedData.name);
+          setScannedItem(scannedData);
+          scannedItemRef.current = scannedData; // Update ref immediately
+        }
       }
     } catch (error) {
-      console.error('Error in place-in mode:', error);
-      // Reset on error
-      setScannedItem(null);
-      setWaitingForContainer(false);
+      if (error.response && error.response.status === 404) {
+        // Item doesn't exist - just ignore this scan
+        console.log('❌ Place-In: Item not found in database (404), ignoring');
+      } else {
+        console.error('❌❌❌ Place-In: Error occurred:', error);
+        console.error('Error response:', error.response?.data);
+        console.error('Error status:', error.response?.status);
+        console.error('Error message:', error.message);
+        // Reset on error
+        setScannedItem(null);
+        scannedItemRef.current = null; // Update ref immediately
+      }
     }
   };
 
@@ -345,100 +359,25 @@ export default function QRScannerOverlay({ navigation, onClose }) {
     return null;
   };
 
-  const handleCameraSwitch = async () => {
-    if (cameras.length <= 1 || !html5QrCodeRef.current) return;
 
-    const nextIndex = (currentCameraIndex + 1) % cameras.length;
-    
-    try {
-      await html5QrCodeRef.current.stop();
-      await startScanning(html5QrCodeRef.current, cameras[nextIndex].id);
-      setCurrentCameraIndex(nextIndex);
-    } catch (error) {
-      console.error('Failed to switch camera:', error);
-    }
-  };
-
-  const toggleFlash = async () => {
-    if (!html5QrCodeRef.current) {
-      console.error('Scanner not initialized');
-      return;
-    }
-
-    const newFlashState = !isFlashOn;
-    console.log('Toggling flash to:', newFlashState);
-    setIsFlashOn(newFlashState);
-    await applyFlash(html5QrCodeRef.current, newFlashState);
-  };
-
-  const applyFlash = async (scanner, enabled) => {
-    try {
-      console.log('applyFlash called with enabled:', enabled);
-      
-      const videoElement = document.getElementById(scannerIdRef.current)?.querySelector('video');
-      console.log('Video element found:', !!videoElement);
-      
-      if (!videoElement || !videoElement.srcObject) {
-        console.error('Video element or stream not found');
-        return;
-      }
-
-      const tracks = videoElement.srcObject.getVideoTracks();
-      console.log('Video tracks count:', tracks.length);
-      
-      if (tracks.length === 0) {
-        console.error('No video tracks available');
-        return;
-      }
-
-      const track = tracks[0];
-      console.log('Using track:', track.label);
-      
-      const capabilities = track.getCapabilities();
-      console.log('Track capabilities:', JSON.stringify(capabilities, null, 2));
-
-      if (capabilities.torch) {
-        console.log('Applying torch constraint:', enabled);
-        
-        try {
-          await track.applyConstraints({
-            advanced: [{ torch: enabled }]
-          });
-          
-          // Verify it was applied
-          const settings = track.getSettings();
-          console.log('Track settings after constraint:', settings);
-          console.log('Torch is now:', settings.torch ? 'ON' : 'OFF');
-          
-        } catch (constraintError) {
-          console.error('Failed to apply constraint:', constraintError);
-          
-          // Try alternative approach
-          console.log('Trying alternative constraint format...');
-          await track.applyConstraints({
-            torch: enabled
-          });
-          console.log('Alternative constraint applied');
-        }
-      } else {
-        console.warn('Torch capability not available. Available capabilities:', Object.keys(capabilities));
-      }
-    } catch (error) {
-      console.error('Flash operation failed:', error);
-      console.error('Error details:', {
-        name: error.name,
-        message: error.message,
-        stack: error.stack
-      });
-    }
-  };
 
   const handleModeSwitch = (newMode) => {
+    console.log('🔄 MODE SWITCH:', newMode);
     setMode(newMode);
-    // Reset place-in mode state when switching modes
+    modeRef.current = newMode; // Update ref immediately for callbacks
+    
+    // Clear all cooldowns when switching to place-in mode
+    if (newMode === 'place-in') {
+      cooldownCodesRef.current.clear();
+      console.log('✓ Cleared all QR code cooldowns');
+      console.log('✓ Switched to Place-In mode, scannedItem:', scannedItem);
+    }
+    
+    // Reset place-in mode state when switching to view mode
     if (newMode === 'view') {
       setScannedItem(null);
-      setWaitingForContainer(false);
+      scannedItemRef.current = null; // Update ref immediately
+      console.log('✓ Reset scannedItem to null (switched to view mode)');
     }
   };
 
@@ -449,32 +388,16 @@ export default function QRScannerOverlay({ navigation, onClose }) {
         <div id={scannerIdRef.current} style={{ width: '100%' }} />
       </View>
 
-      {/* Camera controls */}
-      <View style={styles.controls}>
-        {cameras.length > 1 && (
-          <TouchableOpacity style={styles.controlButton} onPress={handleCameraSwitch}>
-            <Ionicons name="camera-reverse-outline" size={20} color={colors.card} />
-            <Text style={styles.controlText}>Switch</Text>
-          </TouchableOpacity>
-        )}
-        
-        {flashSupported && (
-          <TouchableOpacity style={styles.controlButton} onPress={toggleFlash}>
-            <Ionicons 
-              name={isFlashOn ? "flash" : "flash-outline"} 
-              size={20} 
-              color={isFlashOn ? colors.warning : colors.card} 
-            />
-            <Text style={styles.controlText}>Flash</Text>
-          </TouchableOpacity>
-        )}
-      </View>
+
 
       {/* Mode selector */}
       <View style={styles.modeSelector}>
         <TouchableOpacity 
           style={[styles.modeButton, mode === 'view' && styles.modeButtonActive]}
-          onPress={() => handleModeSwitch('view')}
+          onPress={() => {
+            console.log('🔘 VIEW BUTTON CLICKED');
+            handleModeSwitch('view');
+          }}
         >
           <Text style={[styles.modeText, mode === 'view' && styles.modeTextActive]}>
             View Item
@@ -483,28 +406,16 @@ export default function QRScannerOverlay({ navigation, onClose }) {
         
         <TouchableOpacity 
           style={[styles.modeButton, mode === 'place-in' && styles.modeButtonActive]}
-          onPress={() => handleModeSwitch('place-in')}
+          onPress={() => {
+            console.log('🔘 PLACE-IN BUTTON CLICKED');
+            handleModeSwitch('place-in');
+          }}
         >
           <Text style={[styles.modeText, mode === 'place-in' && styles.modeTextActive]}>
             Place-In
           </Text>
         </TouchableOpacity>
       </View>
-
-      {/* Status indicator for place-in mode */}
-      {mode === 'place-in' && (
-        <View style={styles.statusBar}>
-          {waitingForContainer ? (
-            <Text style={styles.statusText}>
-              📦 {scannedItem?.name || 'Item'} → Scan container
-            </Text>
-          ) : (
-            <Text style={styles.statusText}>
-              📱 Scan item first
-            </Text>
-          )}
-        </View>
-      )}
     </View>
   );
 }
@@ -513,22 +424,17 @@ const styles = StyleSheet.create({
   container: {
     position: 'fixed',
     bottom: 0,
-    right: Platform.OS === 'web' ? (typeof window !== 'undefined' && window.innerWidth > 768 ? 0 : 80) : 0,
-    left: Platform.OS === 'web' ? (typeof window !== 'undefined' && window.innerWidth > 768 ? 'auto' : 80) : 'auto',
+    right: 0,
     height: '33.33vh',
-    width: Platform.OS === 'web' ? (typeof window !== 'undefined' && window.innerWidth > 768 ? 400 : 'auto') : 'auto',
-    minWidth: Platform.OS === 'web' ? (typeof window !== 'undefined' && window.innerWidth > 768 ? 300 : 'auto') : 'auto',
-    maxWidth: Platform.OS === 'web' ? (typeof window !== 'undefined' && window.innerWidth > 768 ? 400 : 'none') : 'none',
+    minWidth: 300,
+    maxWidth: 400,
     backgroundColor: colors.surface,
     borderTopLeftRadius: 12,
     borderWidth: 2,
     borderColor: colors.primary,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
+    boxShadow: '0px -2px 8px rgba(0,0,0,0.25)',
     elevation: 10,
-    zIndex: 9999,
+    zIndex: 100,
     overflow: 'hidden',
   },
   flashOverlay: {
@@ -578,15 +484,5 @@ const styles = StyleSheet.create({
   },
   modeTextActive: {
     color: colors.primary,
-  },
-  statusBar: {
-    padding: 8,
-    backgroundColor: colors.primaryLight,
-    alignItems: 'center',
-  },
-  statusText: {
-    fontSize: 12,
-    color: colors.text,
-    fontWeight: '600',
   },
 });

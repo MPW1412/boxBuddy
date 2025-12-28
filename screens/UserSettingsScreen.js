@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -6,16 +6,39 @@ import {
   TouchableOpacity,
   StyleSheet,
   ScrollView,
-  ActivityIndicator
+  ActivityIndicator,
+  Platform
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../contexts/AuthContext';
 import ConfirmDialog from '../components/ConfirmDialog';
 import Toast from '../components/Toast';
 import colors from '../constants/colors';
+import { Html5Qrcode } from 'html5-qrcode';
+import axios from 'axios';
+
+const API_URL = Platform.OS === 'web'
+  ? (typeof window !== 'undefined' && window.location.origin.includes('boxbuddy.walther.haus')
+      ? 'https://boxbuddy.walther.haus/api'
+      : 'http://localhost:5000')
+  : 'http://localhost:5000';
+
+
 
 export default function UserSettingsScreen({ navigation }) {
   const { user, logout, updateUser, createEntity } = useAuth();
+
+  // Initialize cameras on web
+  useEffect(() => {
+    if (Platform.OS === 'web') {
+      initCameras();
+    }
+    return () => {
+      if (previewScanner) {
+        previewScanner.stop().catch(() => {});
+      }
+    };
+  }, []);
   
   const showToast = (message, type = 'success') => {
     setToastMessage(message);
@@ -34,6 +57,45 @@ export default function UserSettingsScreen({ navigation }) {
   const [toastVisible, setToastVisible] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
   const [toastType, setToastType] = useState('success');
+
+  // Camera settings
+  const [cameras, setCameras] = useState([]);
+  const [selectedCameraId, setSelectedCameraId] = useState('');
+
+  // Initialize cameras on web
+  useEffect(() => {
+    if (Platform.OS === 'web') {
+      initCameras();
+    }
+  }, []);
+
+  const initCameras = async () => {
+    try {
+      const devices = await Html5Qrcode.getCameras();
+      if (devices && devices.length > 0) {
+        setCameras(devices);
+        // Load saved camera preference, preferring back-facing cameras
+        const savedCameraId = localStorage.getItem('qrScannerLastCameraId');
+        let selectedId = savedCameraId;
+        if (!savedCameraId || !devices.find(d => d.id === savedCameraId)) {
+          // Prefer back-facing camera
+          const backCamera = devices.find(d => d.label.toLowerCase().includes('back') || d.label.toLowerCase().includes('environment'));
+          selectedId = backCamera ? backCamera.id : devices[0].id;
+        }
+        setSelectedCameraId(selectedId);
+      }
+    } catch (error) {
+      console.error('Failed to initialize cameras:', error);
+    }
+  };
+
+  const handleCameraChange = (cameraId) => {
+    setSelectedCameraId(cameraId);
+    localStorage.setItem('qrScannerLastCameraId', cameraId);
+    showToast('Camera preference saved!', 'success');
+  };
+
+
 
   const handleUpdateProfile = async () => {
     setError('');
@@ -204,17 +266,48 @@ export default function UserSettingsScreen({ navigation }) {
             <Text style={[styles.buttonText, styles.secondaryButtonText]}>Create Entity</Text>
           )}
         </TouchableOpacity>
-      </View>
-      
-      <View style={styles.section}>
-        <TouchableOpacity
-          style={[styles.button, styles.logoutButton]}
-          onPress={handleLogout}
-        >
-          <Ionicons name="log-out-outline" size={20} color={colors.card} />
-          <Text style={[styles.buttonText, { marginLeft: 8 }]}>Logout</Text>
-        </TouchableOpacity>
-      </View>
+       </View>
+
+       {Platform.OS === 'web' && (
+         <View style={styles.section}>
+           <Text style={styles.sectionTitle}>QR Scanner Camera</Text>
+
+           <Text style={styles.label}>Default Camera</Text>
+           <View style={styles.dropdown}>
+             {cameras.map((camera) => (
+               <TouchableOpacity
+                 key={camera.id}
+                 style={[
+                   styles.dropdownItem,
+                   selectedCameraId === camera.id && styles.dropdownItemActive
+                 ]}
+                 onPress={() => handleCameraChange(camera.id)}
+               >
+                 <Text style={[
+                   styles.dropdownText,
+                   selectedCameraId === camera.id && styles.dropdownTextActive
+                 ]}>
+                   {camera.label}
+                 </Text>
+               </TouchableOpacity>
+             ))}
+           </View>
+
+
+         </View>
+       )}
+
+
+
+       <View style={styles.section}>
+         <TouchableOpacity
+           style={[styles.button, styles.logoutButton]}
+           onPress={handleLogout}
+         >
+           <Ionicons name="log-out-outline" size={20} color={colors.card} />
+           <Text style={[styles.buttonText, { marginLeft: 8 }]}>Logout</Text>
+         </TouchableOpacity>
+       </View>
 
       <ConfirmDialog
         visible={showLogoutConfirm}
@@ -351,6 +444,31 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontWeight: '500',
   },
+  dropdown: {
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 8,
+    marginBottom: 16,
+  },
+  dropdownItem: {
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  dropdownItemActive: {
+    backgroundColor: colors.primaryLight,
+  },
+  dropdownText: {
+    fontSize: 16,
+    color: colors.text,
+  },
+  dropdownTextActive: {
+    color: colors.primary,
+    fontWeight: 'bold',
+  },
+
+
   error: {
     color: colors.error,
     marginHorizontal: 16,

@@ -55,6 +55,7 @@ export default function CreateItemScreen({ route, navigation }) {
   const [cameraOpen, setCameraOpen] = useState(false);
   const videoRef = useRef(null);
   const [itemUuid, setItemUuid] = useState(uuidFromRoute || null);
+  const [itemExists, setItemExists] = useState(false); // Track if item actually exists in DB
   const [cropModalVisible, setCropModalVisible] = useState(false);
 
   useEffect(() => {
@@ -120,6 +121,8 @@ export default function CreateItemScreen({ route, navigation }) {
         return value;
       };
       
+      setItemExists(true); // Item exists in database
+      
       setName(response.data.name || '');
       setType(parseEnum(response.data.type, 'ITEM'));
       setVisibility(parseEnum(response.data.visibility, 'PRIVATE'));
@@ -148,7 +151,15 @@ export default function CreateItemScreen({ route, navigation }) {
         loadContainerInfo(response.data.locationEntityUUID);
       }
     } catch (error) {
-      showToast('Failed to load item details: ' + error.message, 'error');
+      // If item doesn't exist (404), we're creating a new item with this UUID
+      // Don't clear itemUuid - we need it for creating with specific UUID
+      if (error.response && error.response.status === 404) {
+        console.log('Item not found (404) - will create new item with UUID:', targetUuid);
+        setItemExists(false); // Item doesn't exist - we'll create it
+        // Keep itemUuid set so createItem can use it for the UUID
+      } else {
+        showToast('Failed to load item details: ' + error.message, 'error');
+      }
     }
   };
   const [imageToCrop, setImageToCrop] = useState(null);
@@ -268,6 +279,12 @@ export default function CreateItemScreen({ route, navigation }) {
       if (owningEntity) data.owningEntity = owningEntity;
       if (description.trim()) data.description = description.trim();
       if (quantity) data.quantity = parseInt(quantity);
+      
+      // If itemUuid exists (from QR scanner), include it for pre-printed labels
+      if (itemUuid) {
+        data.uuid = itemUuid;
+      }
+      
       const response = await axios.post(`${API_URL}/items`, data);
       const newUuid = response.data.uuid;
       
@@ -812,8 +829,8 @@ export default function CreateItemScreen({ route, navigation }) {
          )}
        </View>
        
-       <TouchableOpacity style={styles.button} onPress={itemUuid ? updateItem : createItem}>
-         <Text style={styles.buttonText}>{itemUuid ? 'Update Item' : 'Create Item'}</Text>
+       <TouchableOpacity style={styles.button} onPress={itemExists ? updateItem : createItem}>
+          <Text style={styles.buttonText}>{itemExists ? 'Update Item' : 'Create Item'}</Text>
        </TouchableOpacity>
        <TouchableOpacity style={styles.button} onPress={addFromCamera}>
          <Text style={styles.buttonText}>Take Photo</Text>
