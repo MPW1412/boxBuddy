@@ -361,55 +361,57 @@ export default function QRScannerOverlay({ navigation, onClose, onGalleryUpdate 
 
 
 
-  const handlePhotoMode = async () => {
+  const capturePhotoFromScanner = async () => {
     if (Platform.OS !== 'web') return;
     
-    // Use native camera on mobile
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = 'image/*';
-    input.capture = 'environment';
-    input.onchange = async (e) => {
-      const file = e.target.files[0];
-      if (file) {
-        const reader = new FileReader();
-        reader.onload = async (event) => {
-          const dataURL = event.target.result;
-          
-          // Upload to gallery directly (no cropping in scanner)
-          try {
-            await axios.post(`${API_URL}/gallery/image`, {
-              image: dataURL,
-              camera_mode: 'qr-scan'
-            }, {
-              withCredentials: true
-            });
-            
-            // Visual feedback
-            triggerScanFeedback();
-            
-            // Notify gallery panel to refresh
-            if (onGalleryUpdate) {
-              onGalleryUpdate();
-            }
-          } catch (error) {
-            console.error('Failed to upload gallery image:', error);
-          }
-        };
-        reader.readAsDataURL(file);
+    // Get the video element from html5-qrcode
+    const scannerElement = document.getElementById(scannerIdRef.current);
+    if (!scannerElement) {
+      console.error('Scanner element not found');
+      return;
+    }
+    
+    const videoElement = scannerElement.querySelector('video');
+    if (!videoElement) {
+      console.error('Video element not found in scanner');
+      return;
+    }
+    
+    // Create canvas from current video frame
+    const canvas = document.createElement('canvas');
+    canvas.width = videoElement.videoWidth;
+    canvas.height = videoElement.videoHeight;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(videoElement, 0, 0);
+    
+    // Convert to dataURL
+    const dataURL = canvas.toDataURL('image/jpeg', 0.9);
+    
+    // Upload to gallery
+    try {
+      await axios.post(`${API_URL}/gallery/image`, {
+        image: dataURL,
+        camera_mode: 'qr-scan'
+      }, {
+        withCredentials: true
+      });
+      
+      // Visual feedback
+      triggerScanFeedback();
+      
+      // Notify gallery panel to refresh
+      if (onGalleryUpdate) {
+        onGalleryUpdate();
       }
-    };
-    input.click();
+      
+      console.log('✓ Photo captured and uploaded to gallery');
+    } catch (error) {
+      console.error('Failed to upload gallery image:', error);
+    }
   };
 
   const handleModeSwitch = (newMode) => {
     console.log('🔄 MODE SWITCH:', newMode);
-    
-    // Photo mode is special - it triggers camera directly
-    if (newMode === 'photo') {
-      handlePhotoMode();
-      return; // Don't actually switch mode, just trigger photo
-    }
     
     setMode(newMode);
     modeRef.current = newMode; // Update ref immediately for callbacks
@@ -463,8 +465,8 @@ export default function QRScannerOverlay({ navigation, onClose, onGalleryUpdate 
         <TouchableOpacity 
           style={styles.modeButton}
           onPress={() => {
-            console.log('🔘 PHOTO BUTTON CLICKED');
-            handleModeSwitch('photo');
+            console.log('📷 PHOTO CAPTURE BUTTON CLICKED');
+            capturePhotoFromScanner();
           }}
         >
           <Ionicons name="camera-outline" size={20} color={colors.textSecondary} />
