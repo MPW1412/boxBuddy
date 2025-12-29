@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet, Image, ScrollView, Platform }
 import { Ionicons } from '@expo/vector-icons';
 import colors from '../constants/colors';
 import axios from 'axios';
+import ConfirmDialog from './ConfirmDialog';
 
 const API_URL = Platform.OS === 'web' 
   ? (typeof window !== 'undefined' && window.location.origin.includes('boxbuddy.walther.haus') 
@@ -10,10 +11,12 @@ const API_URL = Platform.OS === 'web'
       : 'http://localhost:5000')
   : 'http://localhost:5000';
 
-const GalleryPanel = forwardRef(({ visible, onClose }, ref) => {
+const GalleryPanel = forwardRef(({ visible, onClose, scannerEnabled }, ref) => {
   const [galleryImages, setGalleryImages] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [confirmDialogVisible, setConfirmDialogVisible] = useState(false);
+  const [imageToDelete, setImageToDelete] = useState(null);
 
   useEffect(() => {
     if (visible) {
@@ -49,31 +52,49 @@ const GalleryPanel = forwardRef(({ visible, onClose }, ref) => {
     }
   };
 
-  const handleDeleteImage = async (imageUuid) => {
+  const handleDeleteClick = (imageUuid) => {
+    setImageToDelete(imageUuid);
+    setConfirmDialogVisible(true);
+  };
+
+  const confirmDelete = async () => {
     try {
-      await axios.delete(`${API_URL}/gallery/image/${imageUuid}`, {
+      await axios.delete(`${API_URL}/gallery/image/${imageToDelete}`, {
         withCredentials: true
       });
       // Remove from local state
-      setGalleryImages(galleryImages.filter(img => img.uuid !== imageUuid));
+      setGalleryImages(galleryImages.filter(img => img.uuid !== imageToDelete));
+      setConfirmDialogVisible(false);
+      setImageToDelete(null);
     } catch (err) {
       console.error('Failed to delete gallery image:', err);
       setError('Failed to delete image');
+      setConfirmDialogVisible(false);
+      setImageToDelete(null);
     }
+  };
+
+  const handleCancelDelete = () => {
+    setConfirmDialogVisible(false);
+    setImageToDelete(null);
   };
 
   if (!visible) return null;
 
   return (
-    <View style={styles.panel}>
-      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
-        {galleryImages.length === 0 && !loading && (
-          <View style={styles.emptyState}>
-            <Ionicons name="camera-outline" size={32} color={colors.textSecondary} />
-          </View>
-        )}
+    <>
+      <View style={[
+        styles.panel,
+        { height: scannerEnabled ? 'calc(100vh - 33.33vh)' : '100vh' }
+      ]}>
+        <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+          {galleryImages.length === 0 && !loading && (
+            <View style={styles.emptyState}>
+              <Ionicons name="camera-outline" size={32} color={colors.textSecondary} />
+            </View>
+          )}
 
-        {galleryImages.map((img) => (
+          {galleryImages.map((img) => (
           Platform.OS === 'web' ? (
             <div
               key={img.uuid}
@@ -98,7 +119,7 @@ const GalleryPanel = forwardRef(({ visible, onClose }, ref) => {
                 }}
               />
               <div
-                onClick={() => handleDeleteImage(img.uuid)}
+                onClick={() => handleDeleteClick(img.uuid)}
                 style={{
                   position: 'absolute',
                   top: -6,
@@ -126,7 +147,7 @@ const GalleryPanel = forwardRef(({ visible, onClose }, ref) => {
               />
               <TouchableOpacity
                 style={styles.deleteButton}
-                onPress={() => handleDeleteImage(img.uuid)}
+                onPress={() => handleDeleteClick(img.uuid)}
               >
                 <View style={styles.deleteCircle}>
                   <Ionicons name="close" size={12} color="white" />
@@ -135,8 +156,18 @@ const GalleryPanel = forwardRef(({ visible, onClose }, ref) => {
             </View>
           )
         ))}
-      </ScrollView>
-    </View>
+        </ScrollView>
+      </View>
+      
+      <ConfirmDialog
+        visible={confirmDialogVisible}
+        title="Delete Photo"
+        message="Delete this photo from the gallery? This cannot be undone."
+        confirmText="Delete"
+        onConfirm={confirmDelete}
+        onCancel={handleCancelDelete}
+      />
+    </>
   );
 });
 
@@ -147,7 +178,6 @@ const styles = StyleSheet.create({
     position: 'fixed',
     left: 80,
     top: 0,
-    bottom: 0,
     width: 80,
     backgroundColor: colors.card,
     borderRightWidth: 1,
@@ -156,6 +186,7 @@ const styles = StyleSheet.create({
     paddingTop: 10,
     paddingLeft: 3,
     paddingRight: 3,
+    transition: 'height 0.25s ease',
   },
   scrollView: {
     flex: 1,

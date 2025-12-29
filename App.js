@@ -58,7 +58,6 @@ function AppNavigator() {
   const [scannerEnabled, setScannerEnabled] = useState(false);
   const [galleryOpen, setGalleryOpen] = useState(false);
   const galleryPanelRef = useRef();
-  const contentPaddingAnim = useRef(new Animated.Value(0)).current;
   const { user, loading } = useAuth();
 
   // Load pinned containers when user logs in
@@ -116,20 +115,7 @@ function AppNavigator() {
   };
 
   const toggleScanner = () => {
-    const newScannerState = !scannerEnabled;
-    setScannerEnabled(newScannerState);
-    
-    // Animate content padding when scanner is toggled
-    // Scanner height is 33.33vh, convert to pixels for animation
-    if (Platform.OS === 'web' && typeof window !== 'undefined') {
-      const scannerHeight = window.innerHeight * 0.3333; // 33.33vh in pixels
-      
-      Animated.timing(contentPaddingAnim, {
-        toValue: newScannerState ? scannerHeight : 0,
-        duration: 250, // Fast, snappy animation (< 300ms)
-        useNativeDriver: false, // paddingBottom can't use native driver
-      }).start();
-    }
+    setScannerEnabled(!scannerEnabled);
   };
 
   const toggleGallery = () => {
@@ -187,27 +173,28 @@ function AppNavigator() {
           <GalleryPanel 
             visible={galleryOpen}
             onClose={toggleGallery}
+            scannerEnabled={scannerEnabled}
             ref={galleryPanelRef}
           />
         )}
-        <View style={{ flex: 1 }}>
-          {/* Main content area with animated bottom padding when scanner is enabled */}
-          <Animated.View style={{ 
-            flex: 1, 
-            paddingBottom: contentPaddingAnim 
-          }}>
-            <Stack.Navigator initialRouteName="List Items" screenOptions={{ headerShown: false }}>
-              <Stack.Screen name="Create Item" component={CreateItemScreen} />
-              <Stack.Screen name="Edit Item" component={CreateItemScreen} />
-              <Stack.Screen name="List Items">
-                {(props) => <ListItemsScreen {...props} ref={listItemsRef} onPinContainer={addPinnedContainer} />}
-              </Stack.Screen>
-              <Stack.Screen name="Item Detail" component={ItemDetailScreen} />
-              <Stack.Screen name="Bin" component={BinScreen} />
-              <Stack.Screen name="User Settings" component={UserSettingsScreen} />
-              <Stack.Screen name="Print Queue" component={PrintQueueScreen} />
-            </Stack.Navigator>
-          </Animated.View>
+        <View style={{ 
+          flex: 1,
+          height: scannerEnabled ? 'calc(100vh - 33.33vh)' : '100vh',
+          marginLeft: galleryOpen ? 160 : 80,
+          transition: 'all 0.25s ease',
+        }}>
+          <Stack.Navigator initialRouteName="List Items" screenOptions={{ headerShown: false }}>
+            <Stack.Screen name="Create Item" component={CreateItemScreen} />
+            <Stack.Screen name="Edit Item" component={CreateItemScreen} />
+            <Stack.Screen name="List Items">
+              {(props) => <ListItemsScreen {...props} ref={listItemsRef} onPinContainer={addPinnedContainer} />}
+            </Stack.Screen>
+            <Stack.Screen name="Item Detail" component={ItemDetailScreen} />
+            <Stack.Screen name="Bin" component={BinScreen} />
+            <Stack.Screen name="User Settings" component={UserSettingsScreen} />
+            <Stack.Screen name="Print Queue" component={PrintQueueScreen} />
+          </Stack.Navigator>
+        </View>
           
           {/* QR Scanner - fixed at bottom-right, content is displaced by padding above */}
           {scannerEnabled && Platform.OS === 'web' && (
