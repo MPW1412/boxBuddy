@@ -538,6 +538,31 @@ export default function CreateItemScreen({ route, navigation }) {
     });
   };
 
+  const handleGalleryImageDrop = async (e) => {
+    e.preventDefault();
+    const galleryImageUuid = e.dataTransfer.getData('galleryImageUuid');
+    
+    if (galleryImageUuid && itemUuid) {
+      try {
+        // Assign gallery image to this item
+        const response = await axios.post(
+          `${API_URL}/gallery/image/${galleryImageUuid}/assign/${itemUuid}`,
+          {},
+          { withCredentials: true }
+        );
+        
+        // Refresh item images
+        await fetchItemDetails();
+        
+        showToast('Photo added from gallery', 'success');
+      } catch (error) {
+        showToast('Failed to add photo: ' + error.message, 'error');
+      }
+    } else if (galleryImageUuid && !itemUuid) {
+      showToast('Please save item first before adding photos', 'error');
+    }
+  };
+
   const uploadImages = async (uuid) => {
     if (!uuid || images.length === 0) return;
 
@@ -895,38 +920,61 @@ export default function CreateItemScreen({ route, navigation }) {
        <TouchableOpacity style={styles.button} onPress={addFromCamera}>
          <Text style={styles.buttonText}>Take Photo</Text>
        </TouchableOpacity>
-      <TouchableOpacity style={styles.button} onPress={addFromGallery}>
-        <Text style={styles.buttonText}>Add from Gallery</Text>
-      </TouchableOpacity>
-      {images.length > 0 && (
-        <ScrollView horizontal style={styles.imageScroll}>
-          {images.map((imageData, index) => {
-            const uri = typeof imageData === 'string' ? imageData : `${API_URL}/images/${imageData.uuid}`;
-            const isHovered = hoveredImageIndex === index;
-            
-            return (
-              <View 
-                key={index} 
-                style={styles.thumbnailContainer}
-                onMouseEnter={() => Platform.OS === 'web' && setHoveredImageIndex(index)}
-                onMouseLeave={() => Platform.OS === 'web' && setHoveredImageIndex(null)}
-              >
-                <Image source={{ uri }} style={styles.thumbnail} resizeMode="contain" />
-                {(isHovered || Platform.OS !== 'web') && (
-                  <TouchableOpacity
-                    style={styles.deleteButton}
-                    onPress={() => deleteImage(index, imageData)}
-                  >
-                    <View style={styles.deleteCircle}>
-                      <Ionicons name="close" size={16} color="white" />
-                    </View>
-                  </TouchableOpacity>
-                )}
-              </View>
-            );
-          })}
-        </ScrollView>
-      )}
+       <TouchableOpacity style={styles.button} onPress={addFromGallery}>
+         <Text style={styles.buttonText}>Add from Gallery</Text>
+       </TouchableOpacity>
+       
+       {Platform.OS === 'web' && (
+         <div
+           onDrop={handleGalleryImageDrop}
+           onDragOver={(e) => e.preventDefault()}
+           style={{
+             marginTop: 10,
+             marginBottom: 10,
+             padding: 20,
+             borderWidth: 2,
+             borderStyle: 'dashed',
+             borderColor: colors.border,
+             borderRadius: 8,
+             backgroundColor: colors.surface,
+             textAlign: 'center',
+           }}
+         >
+           <Text style={{ color: colors.textSecondary, fontSize: 14 }}>
+             Drag photos from gallery here
+           </Text>
+         </div>
+       )}
+       
+       {images.length > 0 && (
+         <ScrollView horizontal style={styles.imageScroll}>
+           {images.map((imageData, index) => {
+             const uri = typeof imageData === 'string' ? imageData : `${API_URL}/images/${imageData.uuid}`;
+             const isHovered = hoveredImageIndex === index;
+             
+             return (
+               <View 
+                 key={index} 
+                 style={styles.thumbnailContainer}
+                 onMouseEnter={() => Platform.OS === 'web' && setHoveredImageIndex(index)}
+                 onMouseLeave={() => Platform.OS === 'web' && setHoveredImageIndex(null)}
+               >
+                 <Image source={{ uri }} style={styles.thumbnail} resizeMode="contain" />
+                 {(isHovered || Platform.OS !== 'web') && (
+                   <TouchableOpacity
+                     style={styles.deleteButton}
+                     onPress={() => deleteImage(index, imageData)}
+                   >
+                     <View style={styles.deleteCircle}>
+                       <Ionicons name="close" size={16} color="white" />
+                     </View>
+                   </TouchableOpacity>
+                 )}
+               </View>
+             );
+           })}
+         </ScrollView>
+       )}
      </ScrollView>
   );
 }

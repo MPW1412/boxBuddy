@@ -11,6 +11,7 @@ import UserSettingsScreen from './screens/UserSettingsScreen';
 import PrintQueueScreen from './screens/PrintQueueScreen';
 import Sidebar from './components/Sidebar';
 import QRScannerOverlay from './components/QRScannerOverlay';
+import GalleryPanel from './components/GalleryPanel';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import colors from './constants/colors';
 import axios from 'axios';
@@ -55,6 +56,8 @@ function AppNavigator() {
   const [navigation, setNavigation] = useState(null);
   const [pinnedContainers, setPinnedContainers] = useState([]);
   const [scannerEnabled, setScannerEnabled] = useState(false);
+  const [galleryOpen, setGalleryOpen] = useState(false);
+  const galleryPanelRef = useRef();
   const contentPaddingAnim = useRef(new Animated.Value(0)).current;
   const { user, loading } = useAuth();
 
@@ -129,6 +132,17 @@ function AppNavigator() {
     }
   };
 
+  const toggleGallery = () => {
+    setGalleryOpen(!galleryOpen);
+  };
+
+  const handleGalleryUpdate = () => {
+    // Refresh gallery panel when new photo is added
+    if (galleryPanelRef.current?.fetchGalleryImages) {
+      galleryPanelRef.current.fetchGalleryImages();
+    }
+  };
+
   if (loading) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background }}>
@@ -164,7 +178,18 @@ function AppNavigator() {
           onItemMoved={handleItemMoved}
           onToggleScanner={toggleScanner}
           scannerEnabled={scannerEnabled}
+          onToggleGallery={toggleGallery}
+          galleryOpen={galleryOpen}
         />
+        
+        {/* Gallery Panel - left of main content, beside sidebar */}
+        {galleryOpen && Platform.OS === 'web' && (
+          <GalleryPanel 
+            visible={galleryOpen}
+            onClose={toggleGallery}
+            ref={galleryPanelRef}
+          />
+        )}
         <View style={{ flex: 1 }}>
           {/* Main content area with animated bottom padding when scanner is enabled */}
           <Animated.View style={{ 
@@ -189,6 +214,7 @@ function AppNavigator() {
             <QRScannerOverlay 
               navigation={navigation} 
               onClose={toggleScanner}
+              onGalleryUpdate={handleGalleryUpdate}
             />
           )}
         </View>

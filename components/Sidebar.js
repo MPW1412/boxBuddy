@@ -29,7 +29,7 @@ const breakIntoLines = (text, maxCharsPerLine = 6) => {
   return lines.slice(0, 3); // Max 3 lines
 };
 
-export default function Sidebar({ navigation, pinnedContainers = [], onRemovePinned, onPinContainer, onItemMoved, onToggleScanner, scannerEnabled }) {
+export default function Sidebar({ navigation, pinnedContainers = [], onRemovePinned, onPinContainer, onItemMoved, onToggleScanner, scannerEnabled, onToggleGallery, galleryOpen }) {
   const [dragOverContainer, setDragOverContainer] = useState(null);
   const [dragOverPinZone, setDragOverPinZone] = useState(false);
 
@@ -230,8 +230,18 @@ export default function Sidebar({ navigation, pinnedContainers = [], onRemovePin
       )}
       </View>
       
-      {/* Scanner, Print Queue and User icons at bottom */}
+      {/* Scanner, Gallery, Print Queue and User icons at bottom */}
       <View style={styles.bottomSection}>
+        <TouchableOpacity 
+          style={[styles.galleryButton, galleryOpen && styles.galleryButtonActive]} 
+          onPress={onToggleGallery}
+        >
+          <Ionicons 
+            name="images-outline"
+            size={40} 
+            color={colors.card} 
+          />
+        </TouchableOpacity>
         <TouchableOpacity 
           style={[styles.scannerButton, scannerEnabled && styles.scannerButtonActive]} 
           onPress={onToggleScanner}
@@ -276,6 +286,17 @@ const styles = StyleSheet.create({
   },
   bottomSection: {
     paddingBottom: 10,
+  },
+  galleryButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 10,
+    marginVertical: 3,
+    backgroundColor: '#9c27b0',
+    borderRadius: 8,
+  },
+  galleryButtonActive: {
+    backgroundColor: '#7b1fa2',
   },
   scannerButton: {
     alignItems: 'center',

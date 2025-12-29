@@ -11,8 +11,8 @@ const API_URL = Platform.OS === 'web'
       : 'http://localhost:5000')
   : 'http://localhost:5000';
 
-export default function QRScannerOverlay({ navigation, onClose }) {
-  const [mode, setMode] = useState('view'); // 'view' or 'place-in'
+export default function QRScannerOverlay({ navigation, onClose, onGalleryUpdate }) {
+  const [mode, setMode] = useState('view'); // 'view', 'place-in', or 'photo'
   const [cameras, setCameras] = useState([]);
   const [currentCameraIndex, setCurrentCameraIndex] = useState(0);
   const [scanning, setScanning] = useState(false);
@@ -361,8 +361,56 @@ export default function QRScannerOverlay({ navigation, onClose }) {
 
 
 
+  const handlePhotoMode = async () => {
+    if (Platform.OS !== 'web') return;
+    
+    // Use native camera on mobile
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.capture = 'environment';
+    input.onchange = async (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = async (event) => {
+          const dataURL = event.target.result;
+          
+          // Upload to gallery directly (no cropping in scanner)
+          try {
+            await axios.post(`${API_URL}/gallery/image`, {
+              image: dataURL,
+              camera_mode: 'qr-scan'
+            }, {
+              withCredentials: true
+            });
+            
+            // Visual feedback
+            triggerScanFeedback();
+            
+            // Notify gallery panel to refresh
+            if (onGalleryUpdate) {
+              onGalleryUpdate();
+            }
+          } catch (error) {
+            console.error('Failed to upload gallery image:', error);
+          }
+        };
+        reader.readAsDataURL(file);
+      }
+    };
+    input.click();
+  };
+
   const handleModeSwitch = (newMode) => {
     console.log('🔄 MODE SWITCH:', newMode);
+    
+    // Photo mode is special - it triggers camera directly
+    if (newMode === 'photo') {
+      handlePhotoMode();
+      return; // Don't actually switch mode, just trigger photo
+    }
+    
     setMode(newMode);
     modeRef.current = newMode; // Update ref immediately for callbacks
     
@@ -399,9 +447,7 @@ export default function QRScannerOverlay({ navigation, onClose }) {
             handleModeSwitch('view');
           }}
         >
-          <Text style={[styles.modeText, mode === 'view' && styles.modeTextActive]}>
-            View Item
-          </Text>
+          <Ionicons name="eye-outline" size={20} color={mode === 'view' ? colors.primary : colors.textSecondary} />
         </TouchableOpacity>
         
         <TouchableOpacity 
@@ -411,9 +457,17 @@ export default function QRScannerOverlay({ navigation, onClose }) {
             handleModeSwitch('place-in');
           }}
         >
-          <Text style={[styles.modeText, mode === 'place-in' && styles.modeTextActive]}>
-            Place-In
-          </Text>
+          <Ionicons name="archive-outline" size={20} color={mode === 'place-in' ? colors.primary : colors.textSecondary} />
+        </TouchableOpacity>
+        
+        <TouchableOpacity 
+          style={styles.modeButton}
+          onPress={() => {
+            console.log('🔘 PHOTO BUTTON CLICKED');
+            handleModeSwitch('photo');
+          }}
+        >
+          <Ionicons name="camera-outline" size={20} color={colors.textSecondary} />
         </TouchableOpacity>
       </View>
     </View>
