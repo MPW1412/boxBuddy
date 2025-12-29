@@ -168,6 +168,7 @@ export default function CreateItemScreen({ route, navigation }) {
   const [imageRef, setImageRef] = useState(null);
   const [imageSize, setImageSize] = useState({ width: 0, height: 0, naturalWidth: 0, naturalHeight: 0 });
   const [imageLoaded, setImageLoaded] = useState(false);
+  const [rotation, setRotation] = useState(0);
   const [toastVisible, setToastVisible] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
   const [toastType, setToastType] = useState('success');
@@ -404,6 +405,7 @@ export default function CreateItemScreen({ route, navigation }) {
           setCrop({ unit: '%', x: 0, y: 0, width: 100, height: 100 });
           setImageLoaded(false);
           setImageRef(null);
+          setRotation(0);
           setImageToCrop(uri);
           setCropModalVisible(true);
         } else {
@@ -471,6 +473,7 @@ export default function CreateItemScreen({ route, navigation }) {
               setCrop({ unit: '%', x: 0, y: 0, width: 100, height: 100 });
               setImageLoaded(false);
               setImageRef(null);
+              setRotation(0);
               setImageToCrop(dataURL);
               setCropModalVisible(true);
             };
@@ -520,6 +523,7 @@ export default function CreateItemScreen({ route, navigation }) {
       setCrop({ unit: '%', x: 0, y: 0, width: 100, height: 100 });
       setImageLoaded(false);
       setImageRef(null);
+      setRotation(0);
       setImageToCrop(imageUri);
       setCameraOpen(false);
       setCropModalVisible(true);
@@ -579,7 +583,7 @@ export default function CreateItemScreen({ route, navigation }) {
     }
   };
 
-  const getCroppedImg = (imageRef, crop) => {
+  const getCroppedImg = (imageRef, crop, rotation) => {
     if (!imageRef || !imageLoaded) return Promise.reject('Image not loaded');
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
@@ -596,8 +600,32 @@ export default function CreateItemScreen({ route, navigation }) {
       };
     }
 
-    canvas.width = pixelCrop.width * scaleX;
-    canvas.height = pixelCrop.height * scaleY;
+    // Handle rotation - swap dimensions if rotated 90 or 270 degrees
+    const rotationInRadians = (rotation * Math.PI) / 180;
+    const rotated90or270 = rotation === 90 || rotation === 270;
+    
+    if (rotated90or270) {
+      canvas.width = pixelCrop.height * scaleY;
+      canvas.height = pixelCrop.width * scaleX;
+    } else {
+      canvas.width = pixelCrop.width * scaleX;
+      canvas.height = pixelCrop.height * scaleY;
+    }
+    
+    // Set up rotation transform
+    ctx.save();
+    
+    if (rotation === 90) {
+      ctx.translate(canvas.width, 0);
+      ctx.rotate(rotationInRadians);
+    } else if (rotation === 180) {
+      ctx.translate(canvas.width, canvas.height);
+      ctx.rotate(rotationInRadians);
+    } else if (rotation === 270) {
+      ctx.translate(0, canvas.height);
+      ctx.rotate(rotationInRadians);
+    }
+    
     ctx.drawImage(
       imageRef,
       pixelCrop.x * scaleX,
@@ -606,9 +634,11 @@ export default function CreateItemScreen({ route, navigation }) {
       pixelCrop.height * scaleY,
       0,
       0,
-      canvas.width,
-      canvas.height
+      rotated90or270 ? pixelCrop.height * scaleY : pixelCrop.width * scaleX,
+      rotated90or270 ? pixelCrop.width * scaleX : pixelCrop.height * scaleY
     );
+    
+    ctx.restore();
     return canvas.toDataURL('image/jpeg');
   };
 
@@ -629,38 +659,68 @@ export default function CreateItemScreen({ route, navigation }) {
   }
 
   if (cropModalVisible && Platform.OS === 'web') {
+    const rotateImage = () => {
+      setRotation((rotation + 90) % 360);
+      // Reset crop to full image when rotating
+      setCrop({ unit: '%', x: 0, y: 0, width: 100, height: 100 });
+    };
+    
     return (
       <Modal visible={cropModalVisible} animationType="slide">
         <View style={styles.cameraFullScreen}>
           <div style={{ 
-            height: 'calc(100vh - 150px)', 
-            width: '100%', 
+            height: 'calc(100vh - 120px)', 
+            width: '100vw',
             display: 'flex', 
             alignItems: 'center', 
-            justifyContent: 'center',
-            overflow: 'hidden'
+            justifyContent: 'flex-start',
+            overflowY: 'auto',
+            overflowX: 'hidden',
+            padding: '30px 20px',
+            boxSizing: 'border-box'
           }}>
-            <ReactCrop
-              crop={crop}
-              onChange={(newCrop) => setCrop(newCrop)}
-              ruleOfThirds={false}
-            >
-              <img src={imageToCrop} onLoad={(e) => {
-                console.log('Image loaded', e.target);
-                setImageRef(e.target);
-                setImageSize({ width: e.target.offsetWidth, height: e.target.offsetHeight, naturalWidth: e.target.naturalWidth, naturalHeight: e.target.naturalHeight });
-                setImageLoaded(true);
-              }} style={{ maxWidth: '100%', maxHeight: 'calc(100vh - 150px)', objectFit: 'contain', display: 'block' }} />
-            </ReactCrop>
+            <div style={{ 
+              width: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              minHeight: '100%'
+            }}>
+              <ReactCrop
+                crop={crop}
+                onChange={(newCrop) => setCrop(newCrop)}
+                ruleOfThirds={false}
+                style={{ maxWidth: '100%' }}
+              >
+                <img src={imageToCrop} onLoad={(e) => {
+                  console.log('Image loaded', e.target);
+                  setImageRef(e.target);
+                  setImageSize({ width: e.target.offsetWidth, height: e.target.offsetHeight, naturalWidth: e.target.naturalWidth, naturalHeight: e.target.naturalHeight });
+                  setImageLoaded(true);
+                }} style={{ 
+                  maxWidth: 'calc(100vw - 100px)', 
+                  maxHeight: '70vh', 
+                  width: 'auto',
+                  height: 'auto',
+                  objectFit: 'contain', 
+                  display: 'block',
+                  transform: `rotate(${rotation}deg)`,
+                  transition: 'transform 0.3s ease'
+                }} />
+              </ReactCrop>
+            </div>
           </div>
           <View style={styles.cameraControls}>
             <TouchableOpacity style={styles.cameraButton} onPress={() => setCropModalVisible(false)}>
               <Ionicons name="close" size={30} color="white" />
             </TouchableOpacity>
+            <TouchableOpacity style={styles.cameraButton} onPress={rotateImage}>
+              <Ionicons name="refresh" size={30} color="white" />
+            </TouchableOpacity>
             <TouchableOpacity style={[styles.cameraButton, !imageLoaded && { opacity: 0.5 }]} disabled={!imageLoaded} onPress={async () => {
-              console.log('Crop button pressed', imageRef, crop);
+              console.log('Crop button pressed', imageRef, crop, rotation);
               try {
-                const croppedUri = await getCroppedImg(imageRef, crop);
+                const croppedUri = await getCroppedImg(imageRef, crop, rotation);
                 console.log('Cropped URI:', croppedUri);
                 setImages([...images, croppedUri]);
                 setCropModalVisible(false);
