@@ -171,8 +171,6 @@ const GalleryPanel = forwardRef(({ visible, onClose, scannerEnabled }, ref) => {
   );
 });
 
-export default GalleryPanel;
-
 const styles = StyleSheet.create({
   panel: {
     position: 'fixed',
@@ -229,3 +227,5 @@ const styles = StyleSheet.create({
     borderColor: 'white',
   },
 });
+
+export default GalleryPanel;

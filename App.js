@@ -195,16 +195,15 @@ function AppNavigator() {
             <Stack.Screen name="Print Queue" component={PrintQueueScreen} />
           </Stack.Navigator>
         </View>
-          
-          {/* QR Scanner - fixed at bottom-right, content is displaced by padding above */}
-          {scannerEnabled && Platform.OS === 'web' && (
-            <QRScannerOverlay 
-              navigation={navigation} 
-              onClose={toggleScanner}
-              onGalleryUpdate={handleGalleryUpdate}
-            />
-          )}
-        </View>
+        
+        {/* QR Scanner - fixed at bottom, full width from sidebar */}
+        {scannerEnabled && Platform.OS === 'web' && (
+          <QRScannerOverlay 
+            navigation={navigation} 
+            onClose={toggleScanner}
+            onGalleryUpdate={handleGalleryUpdate}
+          />
+        )}
       </View>
     </NavigationContainer>
   );
