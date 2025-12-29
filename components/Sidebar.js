@@ -292,11 +292,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: 10,
     marginVertical: 3,
-    backgroundColor: '#9c27b0',
+    backgroundColor: '#0092cc',
     borderRadius: 8,
   },
   galleryButtonActive: {
-    backgroundColor: '#7b1fa2',
+    backgroundColor: '#007aa3',
   },
   scannerButton: {
     alignItems: 'center',
