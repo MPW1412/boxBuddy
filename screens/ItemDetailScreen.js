@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image, ScrollView, Platform, Modal, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image, ScrollView, Platform, Modal, Dimensions, Animated } from 'react-native';
 import axios from 'axios';
 import colors from '../constants/colors';
 import { Ionicons } from '@expo/vector-icons';
@@ -30,12 +30,28 @@ export default function ItemDetailScreen({ route, navigation }) {
   const [toastType, setToastType] = useState('success');
   const [imageViewerVisible, setImageViewerVisible] = useState(false);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
+  const [loadedImages, setLoadedImages] = useState(new Set());
+  const [imageOpacity] = useState(new Animated.Value(0));
 
   useEffect(() => {
     if (uuid) {
       fetchDetailedItem();
     }
   }, [uuid]);
+
+  // Update opacity when image changes based on cache status
+  useEffect(() => {
+    if (detailedItem?.images?.[selectedImageIndex]) {
+      const imageUuid = detailedItem.images[selectedImageIndex].uuid;
+      if (loadedImages.has(imageUuid)) {
+        // Image already loaded before, show immediately
+        imageOpacity.setValue(1);
+      } else {
+        // New image, start with preview only
+        imageOpacity.setValue(0);
+      }
+    }
+  }, [selectedImageIndex, detailedItem]);
 
   // Refresh when screen comes into focus (e.g., after editing the item)
   useFocusEffect(
@@ -138,6 +154,16 @@ export default function ItemDetailScreen({ route, navigation }) {
 
   const openImageViewer = (index) => {
     setSelectedImageIndex(index);
+    if (detailedItem?.images?.[index]) {
+      const imageUuid = detailedItem.images[index].uuid;
+      if (loadedImages.has(imageUuid)) {
+        // Already cached, show immediately
+        imageOpacity.setValue(1);
+      } else {
+        // Not cached, start with preview
+        imageOpacity.setValue(0);
+      }
+    }
     setImageViewerVisible(true);
   };
 
@@ -289,7 +315,7 @@ export default function ItemDetailScreen({ route, navigation }) {
             {detailedItem.images.map((img, index) => (
               <TouchableOpacity key={index} onPress={() => openImageViewer(index)}>
                 <Image
-                  source={{ uri: `${API_URL}/images/${img.uuid}` }}
+                  source={{ uri: `${API_URL}/images/${img.uuid}?size=preview` }}
                   style={styles.photo}
                   resizeMode="contain"
                 />
@@ -303,7 +329,7 @@ export default function ItemDetailScreen({ route, navigation }) {
       <Modal
         visible={imageViewerVisible}
         transparent={true}
-        animationType="fade"
+        animationType="none"
         onRequestClose={closeImageViewer}
       >
         <TouchableOpacity 
@@ -322,13 +348,34 @@ export default function ItemDetailScreen({ route, navigation }) {
             <Ionicons name="close" size={32} color="white" />
           </TouchableOpacity>
 
-          {/* Image - Prevent close when clicking image itself */}
+          {/* Progressive Image Loading - Preview first, then high-res */}
           {detailedItem.images && detailedItem.images[selectedImageIndex] && (
-            <Image
-              source={{ uri: `${API_URL}/images/${detailedItem.images[selectedImageIndex].uuid}` }}
-              style={styles.fullscreenImage}
-              resizeMode="contain"
-            />
+            <View style={styles.fullscreenImage}>
+              {/* Preview image - shows immediately */}
+              <Image
+                source={{ uri: `${API_URL}/images/${detailedItem.images[selectedImageIndex].uuid}?size=preview` }}
+                style={[styles.fullscreenImage, { position: 'absolute' }]}
+                resizeMode="contain"
+              />
+              
+              {/* Original high-res image - shows immediately when loaded */}
+              <Animated.Image
+                source={{ uri: `${API_URL}/images/${detailedItem.images[selectedImageIndex].uuid}` }}
+                style={[
+                  styles.fullscreenImage, 
+                  { 
+                    position: 'absolute',
+                    opacity: imageOpacity
+                  }
+                ]}
+                resizeMode="contain"
+                onLoad={() => {
+                  const imageUuid = detailedItem.images[selectedImageIndex].uuid;
+                  setLoadedImages(prev => new Set([...prev, imageUuid]));
+                  imageOpacity.setValue(1);
+                }}
+              />
+            </View>
           )}
 
           {/* Navigation Arrows */}
@@ -394,7 +441,7 @@ export default function ItemDetailScreen({ route, navigation }) {
                 )}
                 {containedItem.images && containedItem.images.length > 0 && (
                   <Image
-                    source={{ uri: `${API_URL}/images/${containedItem.images[0].uuid}` }}
+          source={{ uri: `${API_URL}/images/${containedItem.images[0].uuid}?size=thumb` }}
                     style={styles.containedItemImage}
                     resizeMode="contain"
                   />

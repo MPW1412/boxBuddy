@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, FlatList, Alert, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, FlatList, Alert, Platform, Image, ScrollView } from 'react-native';
 import axios from 'axios';
 import colors from '../constants/colors';
 import { Ionicons } from '@expo/vector-icons';
@@ -111,10 +111,11 @@ export default function BinScreen({ navigation }) {
         Moved to bin: {new Date(item.modified_time).toLocaleDateString()}
       </Text>
       {item.images && item.images.length > 0 && (
-        <View style={styles.imageIndicator}>
-          <Ionicons name="images" size={16} color={colors.primary} />
-          <Text style={styles.imageCount}>{item.images.length} photo{item.images.length !== 1 ? 's' : ''}</Text>
-        </View>
+        <ScrollView horizontal style={styles.imageScroll}>
+          {item.images.map((img, index) => (
+            <Image key={index} source={{ uri: `${API_URL}/images/${img.uuid}?size=thumb` }} style={styles.thumbnail} resizeMode="contain" />
+          ))}
+        </ScrollView>
       )}
       <View style={styles.itemActions}>
         <TouchableOpacity
@@ -262,15 +263,17 @@ const styles = StyleSheet.create({
     opacity: 0.6,
     marginBottom: 8,
   },
-  imageIndicator: {
+  imageScroll: {
     flexDirection: 'row',
-    alignItems: 'center',
     marginBottom: 15,
+    maxHeight: 80,
   },
-  imageCount: {
-    fontSize: 14,
-    color: colors.primary,
-    marginLeft: 5,
+  thumbnail: {
+    width: 80,
+    height: 80,
+    borderRadius: 8,
+    marginRight: 8,
+    backgroundColor: colors.border,
   },
   itemActions: {
     flexDirection: 'row',
