@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, TouchableOpacity, Text, StyleSheet, Image, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import colors from '../constants/colors';
@@ -32,6 +32,32 @@ const breakIntoLines = (text, maxCharsPerLine = 6) => {
 export default function Sidebar({ navigation, pinnedContainers = [], onRemovePinned, onPinContainer, onItemMoved, onToggleScanner, scannerEnabled, onToggleGallery, galleryOpen }) {
   const [dragOverContainer, setDragOverContainer] = useState(null);
   const [dragOverPinZone, setDragOverPinZone] = useState(false);
+  const [powerContainer, setPowerContainer] = useState(null);
+  const [powerItemCount, setPowerItemCount] = useState(0);
+  
+  useEffect(() => {
+    if (navigation) {
+      fetchPowerContainer();
+      // Refresh every 30 seconds
+      const interval = setInterval(fetchPowerContainer, 30000);
+      return () => clearInterval(interval);
+    }
+  }, [navigation]);
+  
+  const fetchPowerContainer = async () => {
+    try {
+      console.log('Fetching power container...');
+      const response = await axios.get(`${API_URL}/power-container`, {
+        withCredentials: true
+      });
+      console.log('Power container response:', response.data);
+      setPowerContainer(response.data.container);
+      setPowerItemCount(response.data.stats.total);
+      console.log('Power container set:', response.data.container.uuid);
+    } catch (error) {
+      console.error('Failed to fetch power container:', error);
+    }
+  };
 
   const handleDrop = async (e, containerUuid) => {
     e.preventDefault();
@@ -121,7 +147,7 @@ export default function Sidebar({ navigation, pinnedContainers = [], onRemovePin
         >
           {hasImage ? (
             <Image
-              source={{ uri: `${API_URL}/images/${container.images[0].uuid}` }}
+              source={{ uri: `${API_URL}/images/${container.images[0].uuid}?size=thumb` }}
               style={styles.containerImage}
               resizeMode="cover"
             />
@@ -179,6 +205,27 @@ export default function Sidebar({ navigation, pinnedContainers = [], onRemovePin
         <TouchableOpacity style={styles.createItem} onPress={() => navigation && navigation.navigate('Create Item')}>
           <Ionicons name="add-circle" size={40} color={colors.card} />
         </TouchableOpacity>
+        
+        {/* Power Container - Red folder with gear icon */}
+        {powerContainer && (
+          <TouchableOpacity 
+            style={styles.powerContainer} 
+            onPress={() => navigation && navigation.navigate('Item Detail', { uuid: powerContainer.uuid })}
+          >
+            <View style={styles.powerIconContainer}>
+              <Ionicons name="folder-open" size={36} color={colors.card} />
+              <View style={styles.gearOverlay}>
+                <Ionicons name="settings" size={18} color={colors.card} />
+              </View>
+            </View>
+            {powerItemCount > 0 && (
+              <View style={styles.powerBadge}>
+                <Text style={styles.powerBadgeText}>{powerItemCount}</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        )}
+        
         <TouchableOpacity style={styles.listItem} onPress={() => navigation && navigation.navigate('List Items')}>
           <Ionicons name="list" size={40} color={colors.card} />
         </TouchableOpacity>
@@ -401,5 +448,47 @@ const styles = StyleSheet.create({
     marginLeft: 10,
     fontSize: 16,
     color: colors.text,
+  },
+  powerContainer: {
+    width: 74,
+    height: 74,
+    borderRadius: 8,
+    backgroundColor: colors.error,  // Red color
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 0,
+    position: 'relative',
+  },
+  powerIconContainer: {
+    position: 'relative',
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  gearOverlay: {
+    position: 'absolute',
+    bottom: -2,
+    right: -2,
+    backgroundColor: colors.error,
+    borderRadius: 10,
+    padding: 1,
+  },
+  powerBadge: {
+    position: 'absolute',
+    top: -5,
+    right: -5,
+    backgroundColor: colors.primary,
+    borderRadius: 12,
+    minWidth: 24,
+    height: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 6,
+  },
+  powerBadgeText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: 'bold',
   },
 });

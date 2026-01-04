@@ -1,8 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, Image, StyleSheet, Alert, ScrollView, Platform, Modal, Switch, FlatList } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, Image, StyleSheet, Alert, ScrollView, Platform, Modal, Switch, FlatList, Animated } from 'react-native';
 import { Dimensions } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import * as ImagePicker from 'expo-image-picker';
+import { Audio } from 'expo-av';
 import axios from 'axios';
 import colors from '../constants/colors';
 import { Ionicons } from '@expo/vector-icons';
@@ -35,6 +36,7 @@ export default function CreateItemScreen({ route, navigation }) {
   const [nestable, setNestable] = useState(false);
   const [images, setImages] = useState([]);
   const [imagesToDelete, setImagesToDelete] = useState([]); // Track images to delete on update
+  const [pendingGalleryImages, setPendingGalleryImages] = useState([]); // Gallery images waiting for item to be saved
   const [selectedContainer, setSelectedContainer] = useState(null);
   const [containerSearchQuery, setContainerSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
@@ -54,9 +56,22 @@ export default function CreateItemScreen({ route, navigation }) {
   });
   const [cameraOpen, setCameraOpen] = useState(false);
   const videoRef = useRef(null);
+  const dropZoneRef = useRef(null);
   const [itemUuid, setItemUuid] = useState(uuidFromRoute || null);
   const [itemExists, setItemExists] = useState(false); // Track if item actually exists in DB
   const [cropModalVisible, setCropModalVisible] = useState(false);
+  
+  // Power Mode state
+  const [powerModeActive, setPowerModeActive] = useState(false);
+  const [recording, setRecording] = useState(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingDuration, setRecordingDuration] = useState(0);
+  const [waveformBars, setWaveformBars] = useState(Array(20).fill(0.1));
+  const recordingStartTime = useRef(null);
+  const waveformInterval = useRef(null);
+  const uploadQueue = useRef([]);
+  const retryTimerRef = useRef(null);
+  const MAX_RECORDING_DURATION = 300000; // 300 seconds = 5 minutes
 
   useEffect(() => {
     // Fetch item details when editing an existing item
@@ -69,6 +84,117 @@ export default function CreateItemScreen({ route, navigation }) {
       setImagesToDelete([]);
     }
   }, [route.params?.uuid, route.params?.item?.uuid]);
+
+  // Setup touch drop event listener for gallery images
+  useEffect(() => {
+    if (Platform.OS === 'web' && dropZoneRef.current) {
+      const handleGalleryImageDropEvent = async (e) => {
+        const imageUuid = e.detail.imageUuid;
+        
+        if (imageUuid && itemUuid && itemExists) {
+          // Item already exists and saved - assign immediately
+          try {
+            await axios.post(
+              `${API_URL}/gallery/image/${imageUuid}/assign/${itemUuid}`,
+              {},
+              { withCredentials: true }
+            );
+            await fetchItemDetails();
+            // Refresh gallery to remove assigned image
+            if (Platform.OS === 'web' && typeof window !== 'undefined') {
+              window.dispatchEvent(new CustomEvent('refreshGallery'));
+            }
+            showToast('Photo added from gallery', 'success');
+          } catch (error) {
+            showToast('Failed to add photo: ' + error.message, 'error');
+          }
+        } else {
+          // Item not saved yet - just add to pending in UI
+          setPendingGalleryImages(prev => {
+            const newPending = [...prev, imageUuid];
+            // Notify gallery to hide this image
+            if (Platform.OS === 'web' && typeof window !== 'undefined') {
+              window.dispatchEvent(new CustomEvent('galleryPendingChanged', { 
+                detail: { pendingImages: newPending }
+              }));
+            }
+            return newPending;
+          });
+          // Show preview by adding to images list
+          setImages(prev => [...prev, { uuid: imageUuid, isPending: true }]);
+          showToast('Photo added to draft', 'success');
+        }
+      };
+
+      const dropZone = dropZoneRef.current;
+      dropZone.addEventListener('galleryImageDrop', handleGalleryImageDropEvent);
+      
+      return () => {
+        dropZone.removeEventListener('galleryImageDrop', handleGalleryImageDropEvent);
+      };
+    }
+  }, [itemUuid, itemExists]);
+
+  // Power Mode: Auto-attach new gallery images
+  useEffect(() => {
+    if (!powerModeActive || Platform.OS !== 'web') {
+      console.log('⏭️ Skipping Power Mode gallery listener setup - powerModeActive:', powerModeActive, 'Platform:', Platform.OS);
+      return;
+    }
+    
+    console.log('✅ Setting up Power Mode gallery listener');
+    
+    const handleGalleryUpdate = async (e) => {
+      console.log('🎯 refreshGallery event caught in Power Mode!');
+      // Fetch latest gallery images
+      try {
+        const response = await axios.get(`${API_URL}/gallery`, {
+          withCredentials: true
+        });
+        
+        if (response.data && response.data.length > 0) {
+          // Get the latest image (first in array since they're ordered desc by creation_time)
+          const latestImage = response.data[0];
+          
+          // Check if this image is already in our list
+          const alreadyAdded = images.some(img => img.uuid === latestImage.uuid);
+          if (!alreadyAdded) {
+            console.log('Auto-attaching gallery image to Power Mode item:', latestImage.uuid);
+            // Add to pending gallery images
+            setPendingGalleryImages(prev => {
+              if (prev.includes(latestImage.uuid)) return prev;
+              const newPending = [...prev, latestImage.uuid];
+              // Notify gallery to hide this image
+              window.dispatchEvent(new CustomEvent('galleryPendingChanged', { 
+                detail: { pendingImages: newPending }
+              }));
+              return newPending;
+            });
+            // Show preview by adding to images list
+            setImages(prev => [...prev, { uuid: latestImage.uuid, isPending: true }]);
+            showToast('Photo attached from QR scanner', 'success');
+          }
+        }
+      } catch (error) {
+        console.error('Failed to fetch gallery images:', error);
+      }
+    };
+    
+    window.addEventListener('refreshGallery', handleGalleryUpdate);
+    
+    return () => {
+      window.removeEventListener('refreshGallery', handleGalleryUpdate);
+    };
+  }, [powerModeActive, images, pendingGalleryImages]);
+
+  // Cleanup retry timer on unmount
+  useEffect(() => {
+    return () => {
+      if (retryTimerRef.current) {
+        clearTimeout(retryTimerRef.current);
+      }
+    };
+  }, []);
 
   const hasChanges = () => {
     if (!itemUuid) return false; // No changes tracking for new items
@@ -98,10 +224,24 @@ export default function CreateItemScreen({ route, navigation }) {
     }
   };
   
-  const handleDiscardChanges = () => {
+  const handleDiscardChanges = async () => {
     setConfirmDialogVisible(false);
     setConfirmDialogData(null);
-    showToast('Changes discarded', 'success');
+    
+    // Just clear pending state - images stay in gallery (never removed in the first place)
+    if (pendingGalleryImages.length > 0) {
+      setPendingGalleryImages([]);
+      // Notify gallery to show images again
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('galleryPendingChanged', { 
+          detail: { pendingImages: [] }
+        }));
+      }
+      showToast('Changes discarded, photos remain in gallery', 'success');
+    } else {
+      showToast('Changes discarded', 'success');
+    }
+    
     // Small delay to show toast before navigating away
     setTimeout(() => navigation.goBack(), 500);
   };
@@ -182,6 +322,294 @@ export default function CreateItemScreen({ route, navigation }) {
     setToastVisible(true);
   };
 
+  // ============================================================================
+  // POWER MODE FUNCTIONS
+  // ============================================================================
+
+  const togglePowerMode = async () => {
+    if (!powerModeActive) {
+      // Start Power Mode
+      const started = await startRecording();
+      if (started) {
+        setPowerModeActive(true);
+        showToast('Power Mode activated - speak naturally', 'success');
+      }
+    } else {
+      // Stop Power Mode
+      // Check if current item has images - if yes, save it first
+      const hasImages = images.length > 0 || pendingGalleryImages.length > 0;
+      
+      if (hasImages) {
+        showToast('Saving item and stopping Power Mode...', 'info');
+        await handlePowerModeNext(false); // Save item but don't continue recording
+      } else {
+        // No images, just discard audio
+        await stopRecording();
+        showToast('Power Mode deactivated - audio discarded', 'info');
+      }
+      
+      setPowerModeActive(false);
+    }
+  };
+
+  const startRecording = async () => {
+    try {
+      console.log('Requesting microphone permissions...');
+      const { status } = await Audio.requestPermissionsAsync();
+      
+      if (status !== 'granted') {
+        showToast('Microphone permission denied', 'error');
+        Alert.alert('Permission Required', 'Microphone access is needed for Power Mode');
+        return false;
+      }
+
+      console.log('Setting audio mode...');
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+        staysActiveInBackground: false,
+      });
+
+      console.log('Starting recording...');
+      const { recording: newRecording } = await Audio.Recording.createAsync(
+        Audio.RecordingOptionsPresets.HIGH_QUALITY,
+        (status) => {
+          // Update waveform based on metering
+          if (status.isRecording && status.metering !== undefined) {
+            updateWaveform(status.metering);
+          }
+          
+          // Update duration
+          if (status.durationMillis) {
+            setRecordingDuration(status.durationMillis);
+            
+            // Check max duration (300 seconds)
+            if (status.durationMillis >= MAX_RECORDING_DURATION) {
+              showToast('Max recording duration reached (5 min)', 'warning');
+              // Don't auto-stop, let user click Next
+            }
+          }
+        },
+        100 // Update every 100ms
+      );
+      
+      setRecording(newRecording);
+      setIsRecording(true);
+      recordingStartTime.current = Date.now();
+      return true;
+    } catch (err) {
+      console.error('Failed to start recording:', err);
+      showToast('Failed to start recording: ' + err.message, 'error');
+      return false;
+    }
+  };
+
+  const stopRecording = async () => {
+    if (!recording) return null;
+    
+    console.log('Stopping recording...');
+    setIsRecording(false);
+    
+    try {
+      await recording.stopAndUnloadAsync();
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: false,
+      });
+      
+      const uri = recording.getURI();
+      
+      setRecording(null);
+      setRecordingDuration(0);
+      setWaveformBars(Array(20).fill(0.1));
+      recordingStartTime.current = null;
+      
+      return uri;
+    } catch (err) {
+      console.error('Error stopping recording:', err);
+      return null;
+    }
+  };
+
+  const updateWaveform = (metering) => {
+    // metering is in dB (typically -160 to 0)
+    // Normalize to 0-1 range
+    const normalized = Math.max(0, Math.min(1, (metering + 160) / 160));
+    
+    console.log('Waveform update - metering:', metering, 'normalized:', normalized);
+    
+    setWaveformBars(prev => {
+      const newBars = [...prev];
+      // Shift left and add new value on right
+      newBars.shift();
+      newBars.push(normalized);
+      return newBars;
+    });
+  };
+
+  const formatDuration = (millis) => {
+    const seconds = Math.floor(millis / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = seconds % 60;
+    return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+  };
+
+  // Upload queue management
+  const processUploadQueue = async () => {
+    if (uploadQueue.current.length === 0) return;
+    
+    const item = uploadQueue.current[0];
+    
+    try {
+      console.log('Processing upload queue item:', item.timestamp);
+      const response = await axios.post(
+        `${API_URL}/power-mode/items`,
+        item.formData,
+        {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+          withCredentials: true,
+        }
+      );
+      
+      console.log('Upload successful:', response.data);
+      // Remove from queue on success
+      uploadQueue.current.shift();
+      
+      // Process next item if available
+      if (uploadQueue.current.length > 0) {
+        processUploadQueue();
+      } else {
+        // Clear retry timer when queue is empty
+        if (retryTimerRef.current) {
+          clearTimeout(retryTimerRef.current);
+          retryTimerRef.current = null;
+        }
+      }
+    } catch (error) {
+      console.error('Upload failed:', error);
+      const isNetworkError = !error.response || error.code === 'ECONNABORTED' || error.code === 'ERR_NETWORK';
+      
+      if (isNetworkError) {
+        showToast(`Upload failed - retrying in 20s (${uploadQueue.current.length} items queued)`, 'error');
+      } else {
+        showToast('Upload failed: ' + (error.response?.data?.error || error.message), 'error');
+        // Remove from queue if it's not a network error (likely a validation error)
+        uploadQueue.current.shift();
+      }
+      
+      // Schedule retry in 20 seconds
+      if (retryTimerRef.current) {
+        clearTimeout(retryTimerRef.current);
+      }
+      retryTimerRef.current = setTimeout(() => {
+        console.log('Retrying upload queue...');
+        processUploadQueue();
+      }, 20000);
+    }
+  };
+
+  const handlePowerModeNext = async (continueRecording = true) => {
+    try {
+      // Stop recording and get audio URI
+      const audioUri = await stopRecording();
+      
+      if (!audioUri) {
+        showToast('No audio recorded', 'error');
+        return;
+      }
+      
+      // Prepare form data
+      const formData = new FormData();
+      formData.append('timestamp', new Date().toISOString());
+      
+      // Add audio file
+      if (Platform.OS === 'web') {
+        const audioBlob = await fetch(audioUri).then(r => r.blob());
+        formData.append('audio', audioBlob, 'recording.m4a');
+      } else {
+        formData.append('audio', {
+          uri: audioUri,
+          type: 'audio/m4a',
+          name: 'recording.m4a'
+        });
+      }
+      
+      // Add photos if any
+      if (images.length > 0 || pendingGalleryImages.length > 0) {
+        // Separate ItemImages and GalleryImages
+        const itemImageUuids = images
+          .filter(img => img.uuid && !img.isPending)
+          .map(img => img.uuid);
+        
+        const galleryImageUuids = pendingGalleryImages.map(img => typeof img === 'string' ? img : img.uuid);
+        
+        if (itemImageUuids.length > 0) {
+          formData.append('photos', JSON.stringify(itemImageUuids));
+        }
+        
+        if (galleryImageUuids.length > 0) {
+          formData.append('gallery_photos', JSON.stringify(galleryImageUuids));
+          console.log('Sending gallery photos:', galleryImageUuids);
+        }
+      }
+      
+      // Add to upload queue
+      const queueItem = {
+        formData,
+        timestamp: new Date().toISOString(),
+      };
+      
+      const wasEmpty = uploadQueue.current.length === 0;
+      uploadQueue.current.push(queueItem);
+      
+      // Start processing queue if it was empty
+      if (wasEmpty) {
+        processUploadQueue();
+      }
+      
+      // Immediately show feedback and continue
+      showToast('Item queued for upload', 'success');
+      
+      // Reset form for next item
+      resetFormForPowerMode();
+      
+      // Only start new recording if continuing Power Mode
+      if (continueRecording) {
+        await startRecording();
+      }
+      
+    } catch (error) {
+      console.error('Power Mode error:', error);
+      showToast('Failed to prepare item: ' + error.message, 'error');
+      
+      // Only restart recording if continuing Power Mode
+      if (continueRecording) {
+        await startRecording();
+      }
+    }
+  };
+
+  const resetFormForPowerMode = () => {
+    setName('');
+    setDescription('');
+    setQuantity('1');
+    setImages([]);
+    setPendingGalleryImages([]);
+    setSelectedContainer(null);
+    // Notify gallery that pending images are cleared
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('galleryPendingChanged', { 
+        detail: { pendingImages: [] }
+      }));
+    }
+    // Keep Power Mode active
+  };
+
+  // ============================================================================
+  // END POWER MODE FUNCTIONS
+  // ============================================================================
+
   const loadContainerInfo = async (containerUuid) => {
     try {
       const response = await axios.get(`${API_URL}/items/${containerUuid}`);
@@ -251,11 +679,28 @@ export default function CreateItemScreen({ route, navigation }) {
     setConfirmDialogVisible(false);
 
     if (isServerImage) {
-      // Mark for deletion (will be deleted when user clicks "Update Item")
-      setImagesToDelete([...imagesToDelete, imageObj.uuid]);
-      // Remove from local state immediately for UI feedback
-      setImages(images.filter((_, i) => i !== index));
-      showToast('Photo will be removed when you update the item', 'success');
+      // Check if it's a pending gallery image
+      if (imageObj.isPending) {
+        // Remove from pending list (image stays in gallery)
+        setPendingGalleryImages(prev => {
+          const newPending = prev.filter(uuid => uuid !== imageObj.uuid);
+          // Notify gallery to show this image again
+          if (Platform.OS === 'web' && typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('galleryPendingChanged', { 
+              detail: { pendingImages: newPending }
+            }));
+          }
+          return newPending;
+        });
+        setImages(images.filter((_, i) => i !== index));
+        showToast('Photo returned to gallery', 'success');
+      } else {
+        // Mark for deletion (will be deleted when user clicks "Update Item")
+        setImagesToDelete([...imagesToDelete, imageObj.uuid]);
+        // Remove from local state immediately for UI feedback
+        setImages(images.filter((_, i) => i !== index));
+        showToast('Photo will be removed when you update the item', 'success');
+      }
     } else {
       // Just remove from local state (not yet uploaded)
       setImages(images.filter((_, i) => i !== index));
@@ -298,8 +743,28 @@ export default function CreateItemScreen({ route, navigation }) {
         }
       }
       
-      // Upload images if any
-      if (images.length > 0) {
+      // Assign pending gallery images first
+      if (pendingGalleryImages.length > 0) {
+        try {
+          for (const galleryImageUuid of pendingGalleryImages) {
+            await axios.post(
+              `${API_URL}/gallery/image/${galleryImageUuid}/assign/${newUuid}`,
+              {},
+              { withCredentials: true }
+            );
+          }
+          // Refresh gallery to remove assigned images
+          if (Platform.OS === 'web' && typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('refreshGallery'));
+          }
+        } catch (error) {
+          showToast('Item created but failed to assign gallery photos: ' + error.message, 'error');
+        }
+      }
+      
+      // Upload images if any (excluding pending gallery images)
+      const localImages = images.filter(img => !img.isPending);
+      if (localImages.length > 0) {
         try {
           await uploadImages(newUuid);
           showToast('Item created and photos uploaded successfully!', 'success');
@@ -324,6 +789,13 @@ export default function CreateItemScreen({ route, navigation }) {
       setNestable(false);
       setSelectedContainer(null);
       setImages([]);
+      setPendingGalleryImages([]);
+      // Clear pending in gallery (now that they're assigned, gallery refresh will handle removal)
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('galleryPendingChanged', { 
+          detail: { pendingImages: [] }
+        }));
+      }
     } catch (error) {
       showToast('Failed to create item: ' + error.message, 'error');
     }
@@ -348,6 +820,29 @@ export default function CreateItemScreen({ route, navigation }) {
       
       await axios.put(`${API_URL}/items/${itemUuid}`, data);
       
+      // Assign pending gallery images
+      if (pendingGalleryImages.length > 0) {
+        try {
+          for (const galleryImageUuid of pendingGalleryImages) {
+            await axios.post(
+              `${API_URL}/gallery/image/${galleryImageUuid}/assign/${itemUuid}`,
+              {},
+              { withCredentials: true }
+            );
+          }
+          setPendingGalleryImages([]);
+          // Refresh gallery to remove assigned images
+          if (Platform.OS === 'web' && typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('refreshGallery'));
+            window.dispatchEvent(new CustomEvent('galleryPendingChanged', { 
+              detail: { pendingImages: [] }
+            }));
+          }
+        } catch (error) {
+          showToast('Item updated but failed to assign gallery photos: ' + error.message, 'error');
+        }
+      }
+      
       // Delete marked images from server
       if (imagesToDelete.length > 0) {
         try {
@@ -361,8 +856,8 @@ export default function CreateItemScreen({ route, navigation }) {
         }
       }
       
-      // Check if there are new local images to upload
-      const hasNewImages = images.some(img => typeof img === 'string');
+      // Check if there are new local images to upload (excluding pending gallery images)
+      const hasNewImages = images.some(img => typeof img === 'string' || (img && !img.isPending && typeof img === 'object'));
       
       if (hasNewImages) {
         try {
@@ -542,10 +1037,10 @@ export default function CreateItemScreen({ route, navigation }) {
     e.preventDefault();
     const galleryImageUuid = e.dataTransfer.getData('galleryImageUuid');
     
-    if (galleryImageUuid && itemUuid) {
+    if (galleryImageUuid && itemUuid && itemExists) {
+      // Item already exists and saved - assign immediately
       try {
-        // Assign gallery image to this item
-        const response = await axios.post(
+        await axios.post(
           `${API_URL}/gallery/image/${galleryImageUuid}/assign/${itemUuid}`,
           {},
           { withCredentials: true }
@@ -554,12 +1049,30 @@ export default function CreateItemScreen({ route, navigation }) {
         // Refresh item images
         await fetchItemDetails();
         
+        // Refresh gallery to remove assigned image
+        if (Platform.OS === 'web' && typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('refreshGallery'));
+        }
+        
         showToast('Photo added from gallery', 'success');
       } catch (error) {
         showToast('Failed to add photo: ' + error.message, 'error');
       }
-    } else if (galleryImageUuid && !itemUuid) {
-      showToast('Please save item first before adding photos', 'error');
+    } else {
+      // Item not saved yet - just add to pending in UI
+      setPendingGalleryImages(prev => {
+        const newPending = [...prev, galleryImageUuid];
+        // Notify gallery to hide this image
+        if (Platform.OS === 'web' && typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('galleryPendingChanged', { 
+            detail: { pendingImages: newPending }
+          }));
+        }
+        return newPending;
+      });
+      // Show preview by adding to images list
+      setImages(prev => [...prev, { uuid: galleryImageUuid, isPending: true }]);
+      showToast('Photo added to draft', 'success');
     }
   };
 
@@ -792,7 +1305,50 @@ export default function CreateItemScreen({ route, navigation }) {
           {itemUuid ? 'Edit Item' : 'Create New Item'}
           {itemUuid && hasChanges() && <Text style={styles.unsavedIndicator}> *</Text>}
         </Text>
+        
+        {/* Power Mode Toggle Button (only for new items) */}
+        {!itemUuid && (
+          <TouchableOpacity 
+            style={[
+              styles.powerModeButton,
+              powerModeActive && styles.powerModeButtonActive
+            ]}
+            onPress={togglePowerMode}
+          >
+            <Ionicons 
+              name={isRecording ? "mic" : "mic-outline"} 
+              size={24} 
+              color={powerModeActive ? "white" : colors.error} 
+            />
+            {isRecording && <View style={styles.recordingPulse} />}
+          </TouchableOpacity>
+        )}
       </View>
+      
+      {/* Power Mode Panel */}
+      {powerModeActive && (
+        <View style={styles.powerModeRow}>
+          <View style={styles.powerModePanel}>
+            <Ionicons name="radio-button-on" size={16} color={colors.error} />
+            <Text style={styles.recordingText}>
+              {formatDuration(recordingDuration)}
+              {recordingDuration >= MAX_RECORDING_DURATION && ' (MAX)'}
+            </Text>
+          </View>
+          
+          {/* Next Item Button - Outside panel */}
+          <TouchableOpacity 
+            style={styles.inlineNextButton} 
+            onPress={handlePowerModeNext}
+          >
+            <Ionicons 
+              name="arrow-forward" 
+              size={20} 
+              color="white"
+            />
+          </TouchableOpacity>
+        </View>
+      )}
       <TextInput
         style={styles.input}
         placeholder="Name"
@@ -912,11 +1468,24 @@ export default function CreateItemScreen({ route, navigation }) {
              )}
            </View>
          )}
-       </View>
-       
-       <TouchableOpacity style={styles.button} onPress={itemExists ? updateItem : createItem}>
-          <Text style={styles.buttonText}>{itemExists ? 'Update Item' : 'Create Item'}</Text>
-       </TouchableOpacity>
+        </View>
+        
+         {!powerModeActive && (
+           <TouchableOpacity 
+             style={styles.button} 
+             onPress={itemExists ? updateItem : createItem}
+           >
+             <Ionicons 
+               name="save" 
+               size={20} 
+               color="white" 
+               style={{marginRight: 8}}
+             />
+             <Text style={styles.buttonText}>
+               {itemExists ? 'Update Item' : 'Create Item'}
+             </Text>
+           </TouchableOpacity>
+         )}
        <TouchableOpacity style={styles.button} onPress={addFromCamera}>
          <Text style={styles.buttonText}>Take Photo</Text>
        </TouchableOpacity>
@@ -924,33 +1493,40 @@ export default function CreateItemScreen({ route, navigation }) {
          <Text style={styles.buttonText}>Add from Gallery</Text>
        </TouchableOpacity>
        
-       {Platform.OS === 'web' && (
-         <div
-           onDrop={handleGalleryImageDrop}
-           onDragOver={(e) => e.preventDefault()}
-           style={{
-             marginTop: 10,
-             marginBottom: 10,
-             padding: 20,
-             borderWidth: 2,
-             borderStyle: 'dashed',
-             borderColor: colors.border,
-             borderRadius: 8,
-             backgroundColor: colors.surface,
-             textAlign: 'center',
-           }}
-         >
-           <Text style={{ color: colors.textSecondary, fontSize: 14 }}>
-             Drag photos from gallery here
-           </Text>
-         </div>
-       )}
+         {Platform.OS === 'web' && (
+           <div
+             ref={dropZoneRef}
+             data-gallery-drop-zone="true"
+             onDrop={handleGalleryImageDrop}
+             onDragOver={(e) => e.preventDefault()}
+             style={{
+               marginTop: 10,
+               marginBottom: 100,
+               padding: 30,
+               borderWidth: 2,
+               borderStyle: 'dashed',
+               borderColor: colors.border,
+               borderRadius: 8,
+               backgroundColor: colors.surface,
+               textAlign: 'center',
+             }}
+           >
+             <Text style={{ color: colors.textSecondary, fontSize: 14 }}>
+               Drag photos from gallery here
+             </Text>
+           </div>
+         )}
        
-       {images.length > 0 && (
-         <ScrollView horizontal style={styles.imageScroll}>
-           {images.map((imageData, index) => {
-             const uri = typeof imageData === 'string' ? imageData : `${API_URL}/images/${imageData.uuid}`;
-             const isHovered = hoveredImageIndex === index;
+        {images.length > 0 && (
+          <ScrollView horizontal style={styles.imageScroll}>
+            {images.map((imageData, index) => {
+              // Handle different image types: local (string), server (object), pending gallery (object with isPending)
+              const uri = typeof imageData === 'string' 
+                ? imageData 
+                : imageData.isPending 
+                  ? `${API_URL}/gallery/images/${imageData.uuid}?size=preview`
+                  : `${API_URL}/images/${imageData.uuid}?size=preview`;
+              const isHovered = hoveredImageIndex === index;
              
              return (
                <View 
@@ -1237,5 +1813,61 @@ const styles = StyleSheet.create({
   unsavedIndicator: {
     color: colors.error,
     fontSize: 24,
+  },
+  // Power Mode styles
+  powerModeButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: colors.card,
+    borderWidth: 2,
+    borderColor: colors.error,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+    marginLeft: 'auto',
+  },
+  powerModeButtonActive: {
+    backgroundColor: colors.error,
+  },
+  recordingPulse: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#ff0000',
+  },
+  powerModeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 20,
+    marginTop: 10,
+    marginBottom: 15,
+    gap: 10,
+  },
+  powerModePanel: {
+    backgroundColor: '#fff5f5',
+    borderRadius: 8,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: colors.error,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  recordingText: {
+    marginLeft: 8,
+    fontSize: 14,
+    color: colors.error,
+    fontWeight: '600',
+  },
+  inlineNextButton: {
+    backgroundColor: colors.error,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

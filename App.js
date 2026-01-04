@@ -127,6 +127,11 @@ function AppNavigator() {
     if (galleryPanelRef.current?.fetchGalleryImages) {
       galleryPanelRef.current.fetchGalleryImages();
     }
+    
+    // Dispatch event for Power Mode to auto-attach photo
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('refreshGallery'));
+    }
   };
 
   if (loading) {
@@ -155,20 +160,8 @@ function AppNavigator() {
       ref={(ref) => { navigationRef.current = ref; setNavigation(ref); }}
       linking={linking}
     >
-      <View style={{ flex: 1, flexDirection: 'row' }}>
-        <Sidebar 
-          navigation={navigation} 
-          pinnedContainers={pinnedContainers}
-          onRemovePinned={removePinnedContainer}
-          onPinContainer={addPinnedContainer}
-          onItemMoved={handleItemMoved}
-          onToggleScanner={toggleScanner}
-          scannerEnabled={scannerEnabled}
-          onToggleGallery={toggleGallery}
-          galleryOpen={galleryOpen}
-        />
-        
-        {/* Gallery Panel - left of main content, beside sidebar */}
+      <View style={{ flex: 1 }}>
+        {/* Gallery Panel - positioned fixed, outside flex layout */}
         {galleryOpen && Platform.OS === 'web' && (
           <GalleryPanel 
             visible={galleryOpen}
@@ -177,23 +170,39 @@ function AppNavigator() {
             ref={galleryPanelRef}
           />
         )}
-        <View style={{ 
-          flex: 1,
-          height: scannerEnabled ? 'calc(100vh - 33.33vh)' : '100vh',
-          marginLeft: galleryOpen ? 160 : 80,
-          transition: 'all 0.25s ease',
-        }}>
-          <Stack.Navigator initialRouteName="List Items" screenOptions={{ headerShown: false }}>
-            <Stack.Screen name="Create Item" component={CreateItemScreen} />
-            <Stack.Screen name="Edit Item" component={CreateItemScreen} />
-            <Stack.Screen name="List Items">
-              {(props) => <ListItemsScreen {...props} ref={listItemsRef} onPinContainer={addPinnedContainer} />}
-            </Stack.Screen>
-            <Stack.Screen name="Item Detail" component={ItemDetailScreen} />
-            <Stack.Screen name="Bin" component={BinScreen} />
-            <Stack.Screen name="User Settings" component={UserSettingsScreen} />
-            <Stack.Screen name="Print Queue" component={PrintQueueScreen} />
-          </Stack.Navigator>
+        
+        <View style={{ flex: 1, flexDirection: 'row' }}>
+          <Sidebar 
+            navigation={navigation} 
+            pinnedContainers={pinnedContainers}
+            onRemovePinned={removePinnedContainer}
+            onPinContainer={addPinnedContainer}
+            onItemMoved={handleItemMoved}
+            onToggleScanner={toggleScanner}
+            scannerEnabled={scannerEnabled}
+            onToggleGallery={toggleGallery}
+            galleryOpen={galleryOpen}
+          />
+          
+          <View style={Platform.OS === 'web' ? {
+            flex: 1,
+            height: scannerEnabled ? 'calc(100vh - 33.33vh)' : '100vh',
+            marginLeft: galleryOpen ? 80 : 0,
+            transition: 'margin-left 0.15s ease-out, height 0.2s ease',
+            overflow: 'auto',
+          } : { flex: 1 }}>
+            <Stack.Navigator initialRouteName="List Items" screenOptions={{ headerShown: false }}>
+              <Stack.Screen name="Create Item" component={CreateItemScreen} />
+              <Stack.Screen name="Edit Item" component={CreateItemScreen} />
+              <Stack.Screen name="List Items">
+                {(props) => <ListItemsScreen {...props} ref={listItemsRef} onPinContainer={addPinnedContainer} />}
+              </Stack.Screen>
+              <Stack.Screen name="Item Detail" component={ItemDetailScreen} />
+              <Stack.Screen name="Bin" component={BinScreen} />
+              <Stack.Screen name="User Settings" component={UserSettingsScreen} />
+              <Stack.Screen name="Print Queue" component={PrintQueueScreen} />
+            </Stack.Navigator>
+          </View>
         </View>
         
         {/* QR Scanner - fixed at bottom, full width from sidebar */}

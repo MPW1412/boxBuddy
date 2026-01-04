@@ -111,6 +111,19 @@ export default function QRScannerOverlay({ navigation, onClose, onGalleryUpdate 
          onScanSuccess,
          onScanError
        );
+       
+       // Style the video element to fit properly with aspect ratio maintained
+       setTimeout(() => {
+         const scannerElement = document.getElementById(scannerIdRef.current);
+         if (scannerElement) {
+           const video = scannerElement.querySelector('video');
+           if (video) {
+             video.style.width = '100%';
+             video.style.height = '100%';
+             video.style.objectFit = 'contain';
+           }
+         }
+       }, 100);
     } catch (error) {
       console.error('Failed to start scanning:', error);
     }
@@ -435,7 +448,14 @@ export default function QRScannerOverlay({ navigation, onClose, onGalleryUpdate 
     <View style={[styles.container, scanFlash && styles.flashOverlay]}>
       {/* Scanner viewport */}
       <View style={styles.scannerBox}>
-        <div id={scannerIdRef.current} style={{ width: '100%' }} />
+        <div id={scannerIdRef.current} style={{ 
+          width: '100%', 
+          height: '100%',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          overflow: 'hidden'
+        }} />
       </View>
 
 
